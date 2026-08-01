@@ -438,7 +438,7 @@
                         }
                     } catch (err) { }
 
-                    if (results.length === 0) {
+                    if (results.length === 0 && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
                         try {
                             const resPs = await fetch(`http://localhost:8080/api/search?q=${encodeURIComponent(q)}`);
                             if (resPs.ok) {
@@ -559,7 +559,7 @@
             if (edgeRes.ok) fetchedData = await edgeRes.json();
         } catch (e) { }
 
-        if (!fetchedData || !fetchedData.candles || fetchedData.candles.length === 0) {
+        if ((!fetchedData || !fetchedData.candles || fetchedData.candles.length === 0) && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
             try {
                 const psRes = await fetch(`http://localhost:8080/api/stock?code=${code}&country=${country}`);
                 if (psRes.ok) fetchedData = await psRes.json();
