@@ -33,11 +33,12 @@ export async function onRequestGet(context) {
             const items = naverJson?.items || [];
             items.forEach(it => {
                 if (it && it.code && it.name) {
+                    const isUs = it.nationCode === 'USA' || it.nationName === '미국' || (it.reutersCode && (it.reutersCode.endsWith('.O') || it.reutersCode.endsWith('.N')));
                     results.push({
                         code: it.code,
                         name: it.name,
-                        market: it.typeCode || 'KR',
-                        country: 'KR',
+                        market: it.typeCode || (isUs ? 'US' : 'KR'),
+                        country: isUs ? 'US' : 'KR',
                         type: it.category === 'stock' ? 'STOCK' : 'ETF'
                     });
                 }
