@@ -16,6 +16,7 @@
         currentStockName: '삼성전자',
         currentMarket: 'KOSPI',
         currentCountry: 'KR',
+        searchCountry: 'KR',
         currentStrategy: 'kama1',
         activeCustomStrategy: null,
         candles: [],
@@ -405,6 +406,34 @@
                 switchFlipPage(pageNum);
             });
         });
+
+        // Synchronize and bind search country toggle buttons
+        function syncSearchCountry(country) {
+            state.searchCountry = country;
+            document.querySelectorAll('.search-country-toggle').forEach(toggle => {
+                toggle.querySelectorAll('.country-pill').forEach(btn => {
+                    if (btn.getAttribute('data-country') === country) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+            });
+        }
+
+        document.querySelectorAll('.search-country-toggle .country-pill').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const country = btn.getAttribute('data-country');
+                syncSearchCountry(country);
+                
+                // Dispatch input event to refresh active autocomplete dropdown
+                const activeInput = document.activeElement;
+                if (activeInput && (activeInput.id === 'heroSearchInput' || activeInput.id === 'miniSearchInput')) {
+                    activeInput.dispatchEvent(new Event('input'));
+                }
+            });
+        });
     }
 
     // Dynamic Live Global Autocomplete API Search
@@ -449,29 +478,35 @@
                     }
 
                     if (results.length > 0) {
-                        dropdownEl.innerHTML = results.slice(0, 10).map(r => {
-                            const isKr = r.country === 'KR';
-                            const flag = isKr ? '🇰🇷' : '🇺🇸';
-                            const displayName = (r.name.startsWith('🇰🇷') || r.name.startsWith('🇺🇸')) ? r.name : `${flag} ${r.name}`;
-                            return `
-                                <div class="search-dropdown-item" data-code="${r.code}" data-name="${r.name}" data-country="${r.country}">
-                                    <span class="dropdown-stock-name">${displayName}</span>
-                                    <span class="dropdown-stock-code">${r.code} (${r.market || r.country})</span>
-                                </div>
-                            `;
-                        }).join('');
-                        dropdownEl.classList.remove('hidden');
+                        const filteredResults = results.filter(r => r.country === state.searchCountry);
 
-                        dropdownEl.querySelectorAll('.search-dropdown-item').forEach(item => {
-                            item.addEventListener('click', () => {
-                                const code = item.getAttribute('data-code');
-                                const name = item.getAttribute('data-name');
-                                const country = item.getAttribute('data-country');
-                                inputEl.value = name;
-                                dropdownEl.classList.add('hidden');
-                                handleStockSearch(code, name, country);
+                        if (filteredResults.length > 0) {
+                            dropdownEl.innerHTML = filteredResults.slice(0, 10).map(r => {
+                                const isKr = r.country === 'KR';
+                                const flag = isKr ? '🇰🇷' : '🇺🇸';
+                                const displayName = (r.name.startsWith('🇰🇷') || r.name.startsWith('🇺🇸')) ? r.name : `${flag} ${r.name}`;
+                                return `
+                                    <div class="search-dropdown-item" data-code="${r.code}" data-name="${r.name}" data-country="${r.country}">
+                                        <span class="dropdown-stock-name">${displayName}</span>
+                                        <span class="dropdown-stock-code">${r.code} (${r.market || r.country})</span>
+                                    </div>
+                                `;
+                            }).join('');
+                            dropdownEl.classList.remove('hidden');
+
+                            dropdownEl.querySelectorAll('.search-dropdown-item').forEach(item => {
+                                item.addEventListener('click', () => {
+                                    const code = item.getAttribute('data-code');
+                                    const name = item.getAttribute('data-name');
+                                    const country = item.getAttribute('data-country');
+                                    inputEl.value = name;
+                                    dropdownEl.classList.add('hidden');
+                                    handleStockSearch(code, name, country);
+                                });
                             });
-                        });
+                        } else {
+                            dropdownEl.classList.add('hidden');
+                        }
                     } else {
                         dropdownEl.classList.add('hidden');
                     }
@@ -547,10 +582,10 @@
         const cleanQuery = query.trim().toUpperCase();
         let country = countryHint;
         if (!country) {
-            if (/^\d{6}$/.test(cleanQuery) || cleanQuery.includes('.KS') || cleanQuery.includes('.KQ')) {
+            if (/^\d{6}$/.test(cleanQuery)) {
                 country = 'KR';
             } else {
-                country = 'US';
+                country = state.searchCountry;
             }
         }
 
