@@ -1,5 +1,5 @@
-// Cloudflare Pages Serverless Edge API: /api/stock & /api/search
-// Ultra-fast stock candle data & live global search for KR (KOSPI/KOSDAQ/ETFs) and US (NASDAQ/NYSE/AMEX/ETFs)
+// Cloudflare Pages Serverless Edge API: /api/stock
+// Ultra-fast stock candle data for KR (KOSPI/KOSDAQ/ETFs) and US (NASDAQ/NYSE/AMEX/ETFs)
 
 export async function onRequestGet(context) {
     const corsHeaders = {
@@ -10,71 +10,6 @@ export async function onRequestGet(context) {
     };
 
     const url = new URL(context.request.url);
-    const pathname = url.pathname;
-
-    // 1. Live Global Search Route: /api/search?q={query}
-    if (pathname === '/api/search' || url.searchParams.has('q')) {
-        const query = (url.searchParams.get('q') || '').trim();
-        if (!query) {
-            return new Response(JSON.stringify({ results: [] }), {
-                status: 200,
-                headers: { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders }
-            });
-        }
-
-        const results = [];
-
-        try {
-            // Query Naver Autocomplete for Korean Stocks & ETFs
-            const naverUrl = `https://ac.stock.naver.com/ac?q=${encodeURIComponent(query)}&target=market`;
-            const naverRes = await fetch(naverUrl, {
-                headers: { 'User-Agent': 'Mozilla/5.0' }
-            });
-            if (naverRes.ok) {
-                const naverJson = await naverRes.json();
-                const items = naverJson?.items?.[0] || [];
-                items.forEach(it => {
-                    if (it && it.code && it.name) {
-                        results.push({
-                            code: it.code,
-                            name: it.name,
-                            market: it.typeName || 'KR',
-                            country: 'KR',
-                            type: it.type || 'STOCK'
-                        });
-                    }
-                });
-            }
-        } catch (e) { }
-
-        try {
-            // Query Yahoo Finance Search API for US Stocks & Global ETFs
-            const yahooUrl = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0`;
-            const yahooRes = await fetch(yahooUrl, {
-                headers: { 'User-Agent': 'Mozilla/5.0' }
-            });
-            if (yahooRes.ok) {
-                const yahooJson = await yahooRes.json();
-                const quotes = yahooJson?.quotes || [];
-                quotes.forEach(q => {
-                    if (q && q.symbol && (q.shortname || q.longname)) {
-                        results.push({
-                            code: q.symbol,
-                            name: q.shortname || q.longname || q.symbol,
-                            market: q.exchange || 'US',
-                            country: 'US',
-                            type: q.quoteType || 'EQUITY'
-                        });
-                    }
-                });
-            }
-        } catch (e) { }
-
-        return new Response(JSON.stringify({ query, results }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders }
-        });
-    }
 
     // 2. Stock Daily Candles Route: /api/stock?code={code}&country={country}
     const code = (url.searchParams.get('code') || '005930').trim().toUpperCase();
