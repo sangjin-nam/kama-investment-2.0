@@ -579,18 +579,48 @@
        3. Data Pipeline & Global Stock Load
        ========================================================================== */
     async function handleStockSearch(query, nameHint, countryHint) {
-        const cleanQuery = query.trim().toUpperCase();
+        const cleanQuery = query.trim();
+        if (!cleanQuery) return;
+
+        showDashboardView();
+
+        let code = cleanQuery.toUpperCase();
+        let name = nameHint || cleanQuery;
         let country = countryHint;
+
+        // If no countryHint is provided (direct user keyboard search), resolve it
         if (!country) {
             if (/^\d{6}$/.test(cleanQuery)) {
                 country = 'KR';
+                code = cleanQuery;
             } else {
-                country = state.searchCountry;
+                try {
+                    const res = await fetch(`/api/search?q=${encodeURIComponent(cleanQuery)}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        const matched = (data.results || []).find(r => r.country === state.searchCountry);
+                        if (matched) {
+                            code = matched.code;
+                            name = matched.name;
+                            country = matched.country;
+                        } else if (data.results && data.results.length > 0) {
+                            const first = data.results[0];
+                            code = first.code;
+                            name = first.name;
+                            country = first.country;
+                        } else {
+                            country = state.searchCountry;
+                        }
+                    } else {
+                        country = state.searchCountry;
+                    }
+                } catch (e) {
+                    country = state.searchCountry;
+                }
             }
         }
 
-        showDashboardView();
-        await loadStockData(cleanQuery, nameHint || cleanQuery, country);
+        await loadStockData(code, name, country);
     }
 
     async function loadStockData(code, name, country) {
