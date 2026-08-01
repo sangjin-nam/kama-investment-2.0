@@ -449,21 +449,27 @@
                     }
 
                     if (results.length > 0) {
-                        dropdownEl.innerHTML = results.slice(0, 10).map(r => `
-                            <div class="search-dropdown-item" data-code="${r.code}" data-name="${r.name}">
-                                <span class="dropdown-stock-name">${r.name}</span>
-                                <span class="dropdown-stock-code">${r.code} (${r.market || r.country})</span>
-                            </div>
-                        `).join('');
+                        dropdownEl.innerHTML = results.slice(0, 10).map(r => {
+                            const isKr = r.country === 'KR';
+                            const flag = isKr ? '🇰🇷' : '🇺🇸';
+                            const displayName = (r.name.startsWith('🇰🇷') || r.name.startsWith('🇺🇸')) ? r.name : `${flag} ${r.name}`;
+                            return `
+                                <div class="search-dropdown-item" data-code="${r.code}" data-name="${r.name}" data-country="${r.country}">
+                                    <span class="dropdown-stock-name">${displayName}</span>
+                                    <span class="dropdown-stock-code">${r.code} (${r.market || r.country})</span>
+                                </div>
+                            `;
+                        }).join('');
                         dropdownEl.classList.remove('hidden');
 
                         dropdownEl.querySelectorAll('.search-dropdown-item').forEach(item => {
                             item.addEventListener('click', () => {
                                 const code = item.getAttribute('data-code');
                                 const name = item.getAttribute('data-name');
+                                const country = item.getAttribute('data-country');
                                 inputEl.value = name;
                                 dropdownEl.classList.add('hidden');
-                                handleStockSearch(code, name);
+                                handleStockSearch(code, name, country);
                             });
                         });
                     } else {
@@ -537,17 +543,18 @@
     /* ==========================================================================
        3. Data Pipeline & Global Stock Load
        ========================================================================== */
-    async function handleStockSearch(query, nameHint) {
+    async function handleStockSearch(query, nameHint, countryHint) {
         const cleanQuery = query.trim().toUpperCase();
-        let country = 'US';
-        if (/^\d{6}$/.test(cleanQuery) || cleanQuery.includes('.KS') || cleanQuery.includes('.KQ') || nameHint) {
-            country = 'KR';
+        let country = countryHint;
+        if (!country) {
+            if (/^\d{6}$/.test(cleanQuery) || cleanQuery.includes('.KS') || cleanQuery.includes('.KQ')) {
+                country = 'KR';
+            } else {
+                country = 'US';
+            }
         }
 
         showDashboardView();
-        document.getElementById('currentStockName').textContent = nameHint || cleanQuery;
-        document.getElementById('currentStockSymbol').textContent = cleanQuery;
-
         await loadStockData(cleanQuery, nameHint || cleanQuery, country);
     }
 
@@ -570,10 +577,24 @@
             fetchedData = generateFallbackCandles(code, country);
         }
 
+        const flag = country === 'KR' ? '🇰🇷' : '🇺🇸';
+        let finalName = name;
+        if (!finalName.startsWith('🇰🇷') && !finalName.startsWith('🇺🇸')) {
+            finalName = `${flag} ${finalName}`;
+        }
+
         state.candles = fetchedData.candles || [];
         state.extendedHours = fetchedData.extendedHours || null;
         state.currentSymbol = code;
-        state.currentStockName = name;
+        state.currentStockName = finalName;
+
+        document.getElementById('currentStockName').textContent = finalName;
+        document.getElementById('currentStockSymbol').textContent = code;
+
+        const marketEl = document.getElementById('currentStockMarket');
+        if (marketEl) {
+            marketEl.textContent = country === 'KR' ? 'KRX' : 'US';
+        }
 
         updatePriceHeaderUI();
         recalculateSignalsAndDraw();
@@ -603,27 +624,79 @@
         if (state.candles.length === 0) return;
         const last = state.candles[state.candles.length - 1];
         const prev = state.candles[state.candles.length - 2] || last;
-        const diff = last.close - prev.close;
-        const pct = ((diff / prev.close) * 100).toFixed(2);
 
         const priceEl = document.getElementById('currentStockPrice');
+        const currencyEl = document.getElementById('currentStockCurrency');
         const changeEl = document.getElementById('currentStockChange');
         const extBadge = document.getElementById('extHoursBadge');
+        const extHoursLabel = document.getElementById('extHoursLabel');
         const extPriceContainer = document.getElementById('currentStockExtPrice');
+        const extPriceLabel = document.getElementById('extPriceLabel');
+        const extPriceVal = document.getElementById('extPriceVal');
+        const extPriceChange = document.getElementById('extPriceChange');
 
-        priceEl.textContent = last.close.toLocaleString();
-        changeEl.textContent = `${diff >= 0 ? '+' : ''}${diff.toLocaleString()} (${pct}%)`;
-        changeEl.className = `price-change-tag ${diff >= 0 ? 'up' : 'down'}`;
+        // Detect country from symbol
+        const isKr = /^\d{6}$/.test(state.currentSymbol) || state.currentSymbol.includes('.KS') || state.currentSymbol.includes('.KQ');
 
-        if (state.extendedHours && state.extendedHours.preMarketPrice) {
-            extBadge.classList.remove('hidden');
-            extPriceContainer.classList.remove('hidden');
-            document.getElementById('extPriceVal').textContent = `$${state.extendedHours.preMarketPrice}`;
-            document.getElementById('extPriceChange').textContent = `${state.extendedHours.preMarketChangePercent || '+0.0'}%`;
+        // Set currency symbol and ordering
+        if (isKr) {
+            if (currencyEl) {
+                currencyEl.textContent = '원';
+                currencyEl.style.order = '2';
+            }
+            priceEl.style.order = '1';
+        } else {
+            if (currencyEl) {
+                currencyEl.textContent = '$';
+                currencyEl.style.order = '1';
+            }
+            priceEl.style.order = '2';
+        }
+
+        let mainPrice = last.close;
+        let mainDiff = last.close - prev.close;
+        let mainPct = ((mainDiff / prev.close) * 100).toFixed(2);
+
+        // US Extended Hours Realtime Updates
+        if (!isKr && state.extendedHours) {
+            const eh = state.extendedHours;
+            mainPrice = eh.regularMarketPrice;
+            mainDiff = eh.regularMarketChange;
+            mainPct = eh.regularMarketChangePercent;
+
+            if ((eh.currentMarketState === 'PRE' || eh.currentMarketState === 'POST') && eh.extendedMarketPrice) {
+                extBadge.classList.remove('hidden');
+                extPriceContainer.classList.remove('hidden');
+
+                if (eh.currentMarketState === 'PRE') {
+                    if (extHoursLabel) extHoursLabel.textContent = '🌙 프리마켓 거래중';
+                    if (extPriceLabel) extPriceLabel.textContent = '🌙 프리마켓';
+                } else {
+                    if (extHoursLabel) extHoursLabel.textContent = '🌙 애프터마켓 거래중';
+                    if (extPriceLabel) extPriceLabel.textContent = '🌙 애프터마켓';
+                }
+
+                if (extPriceVal) extPriceVal.textContent = `$${eh.extendedMarketPrice.toFixed(2)}`;
+                if (extPriceChange) {
+                    extPriceChange.textContent = `${eh.extendedMarketChange >= 0 ? '+' : ''}${eh.extendedMarketChange.toFixed(2)} (${eh.extendedMarketChangePercent >= 0 ? '+' : ''}${eh.extendedMarketChangePercent.toFixed(2)}%)`;
+                    extPriceChange.className = `ext-price-change ${eh.extendedMarketChange >= 0 ? 'up' : 'down'}`;
+                }
+            } else {
+                extBadge.classList.add('hidden');
+                extPriceContainer.classList.add('hidden');
+                if (eh.currentMarketState === 'REGULAR') {
+                    extBadge.classList.remove('hidden');
+                    if (extHoursLabel) extHoursLabel.textContent = '☀️ 정규장 개장 중';
+                }
+            }
         } else {
             extBadge.classList.add('hidden');
             extPriceContainer.classList.add('hidden');
         }
+
+        priceEl.textContent = isKr ? mainPrice.toLocaleString() : mainPrice.toFixed(2);
+        changeEl.textContent = `${mainDiff >= 0 ? '+' : ''}${isKr ? Math.round(mainDiff).toLocaleString() : mainDiff.toFixed(2)} (${mainDiff >= 0 ? '+' : ''}${Number(mainPct).toFixed(2)}%)`;
+        changeEl.className = `price-change-tag ${mainDiff >= 0 ? 'up' : 'down'}`;
     }
 
     /* ==========================================================================
@@ -1198,23 +1271,33 @@
 
     function renderWatchlistModal() {
         const container = document.getElementById('watchlistItemsContainer');
-        container.innerHTML = state.watchlist.map(w => `
-            <div class="watchlist-card" onclick="handleStockSearch('${w.symbol}', '${w.name}')">
-                <strong>${w.name}</strong> <span>${w.price} (${w.change})</span>
-            </div>
-        `).join('');
+        container.innerHTML = state.watchlist.map(w => {
+            const isKr = /^\d{6}$/.test(w.symbol) || w.market === 'KOSPI' || w.market === 'KOSDAQ';
+            const flag = isKr ? '🇰🇷' : '🇺🇸';
+            const displayName = (w.name.startsWith('🇰🇷') || w.name.startsWith('🇺🇸')) ? w.name : `${flag} ${w.name}`;
+            return `
+                <div class="watchlist-card" onclick="handleStockSearch('${w.symbol}', '${w.name}', '${isKr ? 'KR' : 'US'}')">
+                    <strong>${displayName}</strong> <span>${w.price} (${w.change})</span>
+                </div>
+            `;
+        }).join('');
     }
 
     function renderHotStocksModal(type) {
         const grid = document.getElementById('hotRankingGrid');
         const items = HOT_STOCKS[type] || HOT_STOCKS.popular;
-        grid.innerHTML = items.map((item, idx) => `
-            <div class="hot-card" onclick="handleStockSearch('${item.code}', '${item.name}')">
-                <span class="rank-num">#${idx + 1}</span>
-                <strong>${item.name}</strong> (${item.code})
-                <span class="${item.isUp ? 'up' : 'down'}">${item.price} (${item.change})</span>
-            </div>
-        `).join('');
+        grid.innerHTML = items.map((item, idx) => {
+            const isKr = /^\d{6}$/.test(item.code) || item.market === 'KOSPI' || item.market === 'KOSDAQ';
+            const flag = isKr ? '🇰🇷' : '🇺🇸';
+            const displayName = (item.name.startsWith('🇰🇷') || item.name.startsWith('🇺🇸')) ? item.name : `${flag} ${item.name}`;
+            return `
+                <div class="hot-card" onclick="handleStockSearch('${item.code}', '${item.name}', '${isKr ? 'KR' : 'US'}')">
+                    <span class="rank-num">#${idx + 1}</span>
+                    <strong>${displayName}</strong> (${item.code})
+                    <span class="${item.isUp ? 'up' : 'down'}">${item.price} (${item.change})</span>
+                </div>
+            `;
+        }).join('');
     }
 
     window.handleStockSearch = handleStockSearch;

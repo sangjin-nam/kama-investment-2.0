@@ -191,14 +191,66 @@ export async function onRequestGet(context) {
                 });
             }
 
-            const extendedHours = {
+            let extendedHours = {
                 regularMarketPrice: meta.regularMarketPrice,
-                preMarketPrice: meta.preMarketPrice,
-                postMarketPrice: meta.postMarketPrice,
-                preMarketChangePercent: meta.preMarketChangePercent,
-                postMarketChangePercent: meta.postMarketChangePercent,
-                currentMarketState: meta.currentTradingPeriod?.regular ? 'REGULAR' : (meta.preMarketPrice ? 'PRE' : 'POST')
+                regularMarketChange: 0,
+                regularMarketChangePercent: 0,
+                extendedMarketPrice: null,
+                extendedMarketChange: 0,
+                extendedMarketChangePercent: 0,
+                currentMarketState: 'CLOSED'
             };
+
+            try {
+                const rtUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}?range=1d&interval=1m&includePrePost=true`;
+                const rtRes = await fetch(rtUrl, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'application/json'
+                    }
+                });
+                if (rtRes.ok) {
+                    const rtJson = await rtRes.json();
+                    const rtResult = rtJson?.chart?.result?.[0];
+                    if (rtResult && rtResult.timestamp && rtResult.timestamp.length > 0) {
+                        const rtMeta = rtResult.meta || {};
+                        const rtQuote = rtResult.indicators?.quote?.[0] || {};
+                        const lastClose = rtQuote.close ? rtQuote.close[rtQuote.close.length - 1] : null;
+                        const lastTs = rtResult.timestamp[rtResult.timestamp.length - 1];
+
+                        const pre = rtMeta.currentTradingPeriod?.pre || {};
+                        const reg = rtMeta.currentTradingPeriod?.regular || {};
+                        const post = rtMeta.currentTradingPeriod?.post || {};
+
+                        let marketState = 'CLOSED';
+                        if (lastTs >= pre.start && lastTs < pre.end) {
+                            marketState = 'PRE';
+                        } else if (lastTs >= reg.start && lastTs < reg.end) {
+                            marketState = 'REGULAR';
+                        } else if (lastTs >= post.start && lastTs <= post.end) {
+                            marketState = 'POST';
+                        }
+
+                        const prevClose = rtMeta.chartPreviousClose || rtMeta.previousClose || lastClose;
+                        const regularChange = (rtMeta.regularMarketPrice && prevClose) ? (rtMeta.regularMarketPrice - prevClose) : 0;
+                        const regularChangePercent = prevClose ? (regularChange / prevClose) * 100 : 0;
+                        const extendedChange = (lastClose && rtMeta.regularMarketPrice) ? (lastClose - rtMeta.regularMarketPrice) : 0;
+                        const extendedChangePercent = rtMeta.regularMarketPrice ? (extendedChange / rtMeta.regularMarketPrice) * 100 : 0;
+
+                        extendedHours = {
+                            regularMarketPrice: rtMeta.regularMarketPrice || lastClose || prevClose,
+                            regularMarketChange: Number(regularChange.toFixed(2)),
+                            regularMarketChangePercent: Number(regularChangePercent.toFixed(2)),
+                            extendedMarketPrice: lastClose ? Number(lastClose.toFixed(2)) : null,
+                            extendedMarketChange: Number(extendedChange.toFixed(2)),
+                            extendedMarketChangePercent: Number(extendedChangePercent.toFixed(2)),
+                            currentMarketState: marketState
+                        };
+                    }
+                }
+            } catch (e) {
+                // Ignore and use default metadata
+            }
 
             return new Response(JSON.stringify({ code, country: 'US', candles, extendedHours }), {
                 status: 200,
