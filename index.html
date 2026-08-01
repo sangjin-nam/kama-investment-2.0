@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>KAMA 인베스트먼트 - 글로벌 주식/ETF 보조지표 & 자산관리 대시보드</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+KR:wght@300;400;500;700;900&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chart.js 4.4.1 & Plugins via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
+
+    <!-- Top Master Header (Google Style Bar) -->
+    <header class="master-header" id="masterHeader">
+        <div class="header-brand" id="headerBrand">
+            <span class="brand-logo-icon"><i data-lucide="trending-up"></i></span>
+            <span class="brand-title">KAMA <span>인베스트먼트</span></span>
+        </div>
+
+        <div class="header-search-mini hidden" id="headerSearchMini">
+            <i data-lucide="search" class="search-icon"></i>
+            <input type="text" id="miniSearchInput" placeholder="전 세계 모든 주식/ETF 검색 (예: 삼성전자, 알테오젠, NVDA, SOXL, SCHD)..." autocomplete="off">
+            <div id="miniSearchDropdown" class="search-dropdown hidden"></div>
+        </div>
+
+        <div class="header-actions">
+            <!-- Extended Hours Mode Badge -->
+            <span class="ext-hours-badge hidden" id="extHoursBadge">
+                <span class="badge-dot pulse"></span>
+                <span id="extHoursLabel">🌙 프리장/애프터마켓</span>
+            </span>
+
+            <!-- Real-Time Signal Alarm Bell -->
+            <button type="button" class="icon-btn notification-bell-btn" id="notificationBellBtn" title="실시간 시그널 알림 센터">
+                <i data-lucide="bell"></i>
+                <span class="bell-badge hidden" id="bellBadge">0</span>
+            </button>
+
+            <!-- Google Style 9-Dots Tile App Menu Button -->
+            <button type="button" class="icon-btn tile-menu-btn" id="tileMenuBtn" title="KAMA 서비스 타일 메뉴">
+                <i data-lucide="layout-grid"></i>
+            </button>
+
+            <!-- Login / Logout Auth Button -->
+            <button type="button" class="btn btn-auth-pill" id="headerAuthBtn">
+                <i data-lucide="log-in" id="authBtnIcon"></i>
+                <span id="authBtnText">로그인</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Google 9-Dots Apps Grid Dropdown Menu -->
+    <div class="tile-menu-dropdown hidden" id="tileMenuDropdown">
+        <div class="tile-menu-header">
+            <h4><i data-lucide="grid"></i> KAMA 서비스 모듈</h4>
+            <button type="button" class="btn-close-mini" id="closeTileMenuBtn">&times;</button>
+        </div>
+        <div class="tile-grid">
+            <button type="button" class="tile-item" data-target-modal="portfolioModal">
+                <div class="tile-icon icon-portfolio"><i data-lucide="pie-chart"></i></div>
+                <span>포트폴리오</span>
+            </button>
+            <button type="button" class="tile-item" data-target-action="openChartEngine">
+                <div class="tile-icon icon-chart"><i data-lucide="line-chart"></i></div>
+                <span>차트분석엔진</span>
+            </button>
+            <button type="button" class="tile-item" data-target-modal="holdingsModal">
+                <div class="tile-icon icon-holdings"><i data-lucide="briefcase"></i></div>
+                <span>보유종목</span>
+            </button>
+            <button type="button" class="tile-item" data-target-modal="watchlistModal">
+                <div class="tile-icon icon-watchlist"><i data-lucide="star"></i></div>
+                <span>관심종목</span>
+            </button>
+            <button type="button" class="tile-item" data-target-modal="hotStocksModal">
+                <div class="tile-icon icon-hot"><i data-lucide="flame"></i></div>
+                <span>HOT 주식</span>
+            </button>
+            <button type="button" class="tile-item" data-target-modal="myAccountModal">
+                <div class="tile-icon icon-account"><i data-lucide="user"></i></div>
+                <span>내계정</span>
+            </button>
+            <button type="button" class="tile-item" data-target-modal="liveChatModal">
+                <div class="tile-icon icon-chat"><i data-lucide="message-square"></i></div>
+                <span>실시간소통방</span>
+            </button>
+            <button type="button" class="tile-item" data-target-modal="communityBoardModal">
+                <div class="tile-icon icon-board"><i data-lucide="clipboard-list"></i></div>
+                <span>게시판</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Notification Center Modal -->
+    <div class="modal-overlay hidden" id="notificationModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i data-lucide="bell"></i> 🚨 KAMA 실시간 시그널 알림 센터</h3>
+                <button type="button" class="modal-close" id="closeNotificationModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alarm-controls">
+                    <button type="button" class="btn btn-xs btn-outline" id="clearAlarmsBtn"><i data-lucide="trash-2"></i> 알림 비우기</button>
+                    <span class="text-muted fs-xs">관심종목 & 보유종목의 매수/매도 시그널이 실시간 탐지됩니다.</span>
+                </div>
+                <div class="alarm-list" id="alarmListContainer">
+                    <div class="empty-state">
+                        <i data-lucide="check-circle-2"></i>
+                        <p>수신된 새로운 매매 시그널이 없습니다.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN VIEW CONTAINER -->
+    <main class="app-main-viewport">
+
+        <!-- 1. Google-Style Minimal Search Hero Landing View -->
+        <section class="google-search-hero" id="googleSearchHero">
+            <div class="hero-content">
+                <div class="hero-brand">
+                    <div class="hero-brand-logo">
+                        <i data-lucide="trending-up"></i>
+                    </div>
+                    <h1 class="hero-brand-title">KAMA <span>인베스트먼트</span></h1>
+                    <p class="hero-subtitle">전 세계 모든 한국/미국 주식 & ETF 10대 보조지표 실시간 분석 시스템</p>
+                </div>
+
+                <!-- Google Main Search Box -->
+                <div class="google-search-box-wrapper">
+                    <div class="google-search-box">
+                        <i data-lucide="search" class="search-main-icon"></i>
+                        <input type="text" id="heroSearchInput" placeholder="전 세계 모든 주식/ETF 검색 (예: 삼성전자, 알테오젠, NVDA, SOXL, SCHD, PLTR)..." autocomplete="off" autofocus>
+                        <button type="button" class="search-submit-btn" id="heroSearchBtn" title="검색">
+                            <i data-lucide="arrow-right"></i>
+                        </button>
+                    </div>
+                    <div id="heroSearchDropdown" class="search-dropdown hidden"></div>
+                </div>
+
+                <!-- Quick Screener & Custom Strategy Filter Options -->
+                <div class="hero-search-filters">
+                    <button type="button" class="filter-pill active" data-screener="all"><i data-lucide="globe"></i> 전체 종목/ETF</button>
+                    <button type="button" class="filter-pill" data-screener="kr"><i data-lucide="flag"></i> 국내 코스피/코스닥/국내ETF</button>
+                    <button type="button" class="filter-pill" data-screener="us"><i data-lucide="dollar-sign"></i> 미국 나스닥/NYSE/미국ETF</button>
+                    <button type="button" class="filter-pill highlight" id="openCustomStrategyBuilderBtn"><i data-lucide="sliders"></i> ⚙️ 나만의 커스텀 분석법 만들기</button>
+                </div>
+
+                <!-- Trending / Hot Stock Quick Tags -->
+                <div class="hot-stock-tags">
+                    <span class="tags-label"><i data-lucide="flame"></i> 실시간 인기 검색:</span>
+                    <button type="button" class="tag-btn" data-symbol="005930" data-name="삼성전자">삼성전자</button>
+                    <button type="button" class="tag-btn" data-symbol="196170" data-name="알테오젠">알테오젠</button>
+                    <button type="button" class="tag-btn" data-symbol="247540" data-name="에코프로비엠">에코프로비엠</button>
+                    <button type="button" class="tag-btn" data-symbol="NVDA" data-name="엔비디아">NVDA (엔비디아)</button>
+                    <button type="button" class="tag-btn" data-symbol="SOXL" data-name="SOXL (3배반도체)">SOXL</button>
+                    <button type="button" class="tag-btn" data-symbol="SCHD" data-name="SCHD (고배당ETF)">SCHD</button>
+                    <button type="button" class="tag-btn" data-symbol="TSLA" data-name="테슬라">TSLA (테슬라)</button>
+                    <button type="button" class="tag-btn" data-symbol="QQQ" data-name="QQQ (나스닥ETF)">QQQ</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Detailed Chart & Technical Analysis Dashboard View -->
+        <section class="main-dashboard-view hidden" id="mainDashboardView">
+            
+            <!-- Dashboard Sub Header / Stock Info Bar -->
+            <div class="dashboard-stock-header">
+                <div class="stock-meta">
+                    <button type="button" class="btn btn-icon-only btn-back-hero" id="backToHeroBtn" title="구글 메인 검색으로 돌아가기">
+                        <i data-lucide="arrow-left"></i>
+                    </button>
+                    <div class="stock-title-wrap">
+                        <h2 id="currentStockName">삼성전자</h2>
+                        <span class="stock-symbol-badge" id="currentStockSymbol">005930.KS</span>
+                        <span class="stock-market-tag" id="currentStockMarket">KOSPI</span>
+                    </div>
+                </div>
+
+                <div class="stock-live-price">
+                    <div class="price-main-wrap">
+                        <span class="price-val" id="currentStockPrice">78,500</span>
+                        <span class="price-unit" id="currentStockCurrency">원</span>
+                        <span class="price-change-tag up" id="currentStockChange">+1,200 (+1.55%)</span>
+                    </div>
+                    <div class="stock-ext-price hidden" id="currentStockExtPrice">
+                        <span class="ext-price-label" id="extPriceLabel">🌙 프리장</span>
+                        <span class="ext-price-val" id="extPriceVal">$124.50</span>
+                        <span class="ext-price-change" id="extPriceChange">+2.1%</span>
+                    </div>
+                </div>
+
+                <div class="dashboard-actions">
+                    <button type="button" class="btn btn-outline btn-sm" id="toggleWatchlistBtn">
+                        <i data-lucide="star" id="starIcon"></i> 관심종목 추가
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" id="addToHoldingsBtn">
+                        <i data-lucide="plus-circle"></i> 보유종목 등록
+                    </button>
+                </div>
+            </div>
+
+            <!-- Instant Strategy Engine Capsule Switcher Bar -->
+            <div class="strategy-switcher-bar">
+                <span class="switcher-label"><i data-lucide="zap"></i> KAMA 분석법:</span>
+                <div class="capsule-group">
+                    <button type="button" class="capsule-btn active" data-strategy="kama1">
+                        🔴🔵 KAMA1 (이격도&RSI/Stoch)
+                    </button>
+                    <button type="button" class="capsule-btn" data-strategy="kama2">
+                        🔴🔵 KAMA2 (삼선전환도)
+                    </button>
+                    <button type="button" class="capsule-btn" data-strategy="kama3">
+                        🔴🔵 KAMA3 (14일고점 & 스토3일MA)
+                    </button>
+                    <button type="button" class="capsule-btn" data-strategy="bollinger">
+                        📊 볼린저밴드 + RSI
+                    </button>
+                    <button type="button" class="capsule-btn" data-strategy="maTrend">
+                        📈 이동평균 추세 (5/20/60/120)
+                    </button>
+                    <button type="button" class="capsule-btn custom-preset-capsule hidden" id="customPresetCapsuleBtn" data-strategy="custom">
+                        ⚙️ 나만의 커스텀 전략
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chart Workspace Container (Supports Fullscreen Mode) -->
+            <div class="chart-workspace" id="chartWorkspace">
+                
+                <!-- Chart Toolbar: Drawing Tools & Fullscreen Toggle -->
+                <div class="chart-toolbar">
+                    <div class="drawing-tools-group">
+                        <span class="tool-label"><i data-lucide="pencil"></i> 차트그리기:</span>
+                        <button type="button" class="tool-btn" data-tool="trendline" title="추세선 그리기"><i data-lucide="minus"></i> 추세선</button>
+                        <button type="button" class="tool-btn" data-tool="horizontal" title="수평 지지/저항선"><i data-lucide="git-commit"></i> 지지/저항선</button>
+                        <button type="button" class="tool-btn" data-tool="fibonacci" title="피보나치 조정대"><i data-lucide="layers"></i> 피보나치</button>
+                        <button type="button" class="tool-btn" data-tool="box" title="박스권 영역"><i data-lucide="square"></i> 박스권</button>
+                        <button type="button" class="tool-btn tool-clear" id="clearDrawingBtn" title="그리기 지우기"><i data-lucide="trash"></i> 지우기</button>
+                    </div>
+
+                    <div class="chart-extra-actions">
+                        <button type="button" class="btn btn-outline btn-sm fullscreen-toggle-btn" id="toggleFullscreenBtn" title="전체화면으로 차트 보기">
+                            <i data-lucide="maximize" id="fullscreenIcon"></i> <span id="fullscreenBtnText">전체화면</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Main Candle & Indicator Chart Canvas Box -->
+                <div class="chart-canvas-container" id="chartCanvasContainer">
+                    <div class="pinned-signal-card" id="pinnedSignalCard">
+                        <div class="signal-badge buy" id="pinnedSignalBadge">🔴 매수 포착</div>
+                        <div class="signal-info">
+                            <span class="signal-date" id="pinnedSignalDate">2026-07-22</span>
+                            <span class="signal-desc" id="pinnedSignalDesc">이격도 상승 + RSI 50% 돌파 포착</span>
+                        </div>
+                    </div>
+
+                    <canvas id="mainStockChart"></canvas>
+                    <canvas id="drawingCanvas" class="drawing-canvas-overlay"></canvas>
+                </div>
+
+                <!-- Signal Scrubber Slider & Navigation Bar -->
+                <div class="signal-scrubber-bar">
+                    <div class="scrubber-controls">
+                        <button type="button" class="btn-scrubber-nav" id="scrubberPrevBtn" title="이전 시그널"><i data-lucide="chevron-left"></i></button>
+                        <span class="scrubber-counter" id="scrubberCounterText">시그널 1 / 1</span>
+                        <button type="button" class="btn-scrubber-nav" id="scrubberNextBtn" title="다음 시그널"><i data-lucide="chevron-right"></i></button>
+                    </div>
+
+                    <div class="scrubber-slider-wrap">
+                        <input type="range" id="signalScrubberRange" min="1" max="1" value="1" step="1" class="scrubber-range-slider">
+                    </div>
+
+                    <div class="scrubber-mode-toggle">
+                        <button type="button" class="btn btn-xs btn-outline active" id="togglePinnedModeBtn">📌 최신 시그널 고정</button>
+                    </div>
+                </div>
+
+                <!-- Comprehensive 10-Indicator Suite Control Bar -->
+                <div class="sub-chart-suite-control">
+                    <div class="suite-header">
+                        <h4><i data-lucide="sliders"></i> 📊 메인차트 하단 10대 보조지표 스위트 (All Technical Indicators)</h4>
+                        <button type="button" class="btn btn-outline btn-sm toggle-all-suite-btn" id="toggleAllSubChartsBtn">
+                            <i data-lucide="layout-grid"></i> <span>10개 보조지표 한눈에 펼쳐보기</span>
+                        </button>
+                    </div>
+
+                    <!-- 10 Page Indicator Quick Tab Bar -->
+                    <div class="indicator-page-tabs">
+                        <button type="button" class="indicator-tab active" data-page-tab="1">1. RSI & 스토케스틱</button>
+                        <button type="button" class="indicator-tab" data-page-tab="2">2. MACD 오실레이터</button>
+                        <button type="button" class="indicator-tab" data-page-tab="3">3. 이격도 (Disparity)</button>
+                        <button type="button" class="indicator-tab" data-page-tab="4">4. OBV & 거래량</button>
+                        <button type="button" class="indicator-tab" data-page-tab="5">5. 볼린저 %B & 밴드폭</button>
+                        <button type="button" class="indicator-tab" data-page-tab="6">6. CCI & Williams %R</button>
+                        <button type="button" class="indicator-tab" data-page-tab="7">7. 일목균형표</button>
+                        <button type="button" class="indicator-tab" data-page-tab="8">8. ADX & +DI/-DI</button>
+                        <button type="button" class="indicator-tab" data-page-tab="9">9. MFI 자금유입지표</button>
+                        <button type="button" class="indicator-tab" data-page-tab="10">10. ATR 변동성지표</button>
+                    </div>
+                </div>
+
+                <!-- Sub-Indicator Flip-Book Carousel (10 Pages System) -->
+                <div class="sub-chart-flip-book" id="subChartFlipBook">
+                    <div class="flip-book-header">
+                        <div class="flip-book-nav">
+                            <button type="button" class="btn-flip-prev" id="flipPrevBtn" title="이전 보조지표"><i data-lucide="arrow-left"></i></button>
+                            <span class="flip-page-indicator" id="flipPageIndicator">1 / 10 페이지 (RSI & Stochastic)</span>
+                            <button type="button" class="btn-flip-next" id="flipNextBtn" title="다음 보조지표"><i data-lucide="arrow-right"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Flip Pages Container (Single Carousel Mode) -->
+                    <div class="flip-pages-viewport" id="flipPagesViewport">
+                        <!-- Page 1: RSI & Stochastic -->
+                        <div class="flip-page active" data-page="1">
+                            <div class="sub-chart-box">
+                                <div class="sub-chart-title">RSI (14) & Stochastic Slow (%K, %D)</div>
+                                <canvas id="subChartPage1"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Page 2: MACD & Oscillator -->
+                        <div class="flip-page" data-page="2">
+                            <div class="sub-chart-box">
+                                <div class="sub-chart-title">MACD (12, 26, 9) & MACD Oscillator</div>
+                                <canvas id="subChartPage2"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Page 3: Disparity (이격도) -->
+                        <div class="flip-page" data-page="3">
+                            <div class="sub-chart-box">
+                                <div class="sub-chart-title">이격도 (Disparity 5일, 20일, 60일, 120일)</div>
+                                <canvas id="subChartPage3"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Page 4: OBV & Volume -->
+                        <div class="flip-page" data-page="4">
+                            <div class="sub-chart-box">
+                                <div class="sub-chart-title">OBV (On Balance Volume) & Volume Trend</div>
+                                <canvas id="subChartPage4"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Page 5: Bollinger %B & BandWidth -->
+                        <div class="flip-page" data-page="5">
+                            <div class="sub-chart-box">
+                                <div class="sub-chart-title">볼린저 밴드 %B (0~1) & 밴드폭 (BandWidth)</div>
+                                <canvas id="subChartPage5"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Page 6: CCI & Williams %R -->
+                        <div class="flip-page" data-page="6">
+                            <div class="sub-chart-box">
+                                <div class="sub-chart-title">CCI (Commodity Channel Index) & Williams %R</div>
+                                <canvas id="subChartPage6"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Page 7: Ichimoku Kinko Hyo -->
+                        <div class="flip-page" data-page="7">
+                            <div class="sub-chart-box">
+                                <div class="sub-chart-title">일목균형표 (전환선, 기준선, 선행스팬1, 2)</div>
+                                <canvas id="subChartPage7"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Page 8: ADX & DI -->
+                        <div class="flip-page" data-page="8">
+                            <div class="sub-chart-box">
+                                <div class="sub-chart-title">ADX (추세강도) & +DI / -DI 방향지표</div>
+                                <canvas id="subChartPage8"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Page 9: MFI -->
+                        <div class="flip-page" data-page="9">
+                            <div class="sub-chart-box">
+                                <div class="sub-chart-title">MFI (Money Flow Index 14일 자금유입)</div>
+                                <canvas id="subChartPage9"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Page 10: ATR -->
+                        <div class="flip-page" data-page="10">
+                            <div class="sub-chart-box">
+                                <div class="sub-chart-title">ATR (Average True Range 14일 평균변동성)</div>
+                                <canvas id="subChartPage10"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Multi Grid Container (Unfolded Mode for All 10 Charts) -->
+                    <div class="multi-indicator-grid hidden" id="multiIndicatorGrid">
+                        <!-- All 10 Sub-Charts Rendered Simultaneously -->
+                        <div class="grid-sub-chart-card"><div class="sub-chart-title">1. RSI & Stochastic</div><canvas id="gridSubChart1"></canvas></div>
+                        <div class="grid-sub-chart-card"><div class="sub-chart-title">2. MACD 오실레이터</div><canvas id="gridSubChart2"></canvas></div>
+                        <div class="grid-sub-chart-card"><div class="sub-chart-title">3. 이격도 (Disparity)</div><canvas id="gridSubChart3"></canvas></div>
+                        <div class="grid-sub-chart-card"><div class="sub-chart-title">4. OBV & 거래량</div><canvas id="gridSubChart4"></canvas></div>
+                        <div class="grid-sub-chart-card"><div class="sub-chart-title">5. 볼린저 %B & 밴드폭</div><canvas id="gridSubChart5"></canvas></div>
+                        <div class="grid-sub-chart-card"><div class="sub-chart-title">6. CCI & Williams %R</div><canvas id="gridSubChart6"></canvas></div>
+                        <div class="grid-sub-chart-card"><div class="sub-chart-title">7. 일목균형표</div><canvas id="gridSubChart7"></canvas></div>
+                        <div class="grid-sub-chart-card"><div class="sub-chart-title">8. ADX & +DI/-DI</div><canvas id="gridSubChart8"></canvas></div>
+                        <div class="grid-sub-chart-card"><div class="sub-chart-title">9. MFI 자금유입지표</div><canvas id="gridSubChart9"></canvas></div>
+                        <div class="grid-sub-chart-card"><div class="sub-chart-title">10. ATR 변동성지표</div><canvas id="gridSubChart10"></canvas></div>
+                    </div>
+
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODALS SECTION -->
+
+    <!-- 1. Custom KAMA Strategy Builder Modal -->
+    <div class="modal-overlay hidden" id="customStrategyModal">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <h3><i data-lucide="sliders"></i> ⚙️ 사용자가 직접 만드는 커스텀 KAMA 매매 법칙</h3>
+                <button type="button" class="modal-close" id="closeCustomStrategyModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="customStrategyForm">
+                    <div class="form-group">
+                        <label>전략 프리셋 이름</label>
+                        <input type="text" id="customStrategyName" placeholder="예: 나만의 꿀조합 단타법" required>
+                    </div>
+
+                    <div class="strategy-builder-grid">
+                        <!-- Buy Condition Group -->
+                        <div class="builder-card buy-rules">
+                            <h4>🔴 매수 화살표 포착 조건</h4>
+                            <div class="form-group">
+                                <label>이격도 (Disparity) 기준</label>
+                                <select id="buyDisparityOp">
+                                    <option value="lte">이하일 때 (과매도 포착)</option>
+                                    <option value="gte">이상일 때 (강세 돌파)</option>
+                                </select>
+                                <input type="number" id="buyDisparityVal" value="98" step="0.5">
+                            </div>
+                            <div class="form-group">
+                                <label>RSI (14일) 기준 %</label>
+                                <select id="buyRsiOp">
+                                    <option value="crossUp">50% 상향 돌파 시</option>
+                                    <option value="lte">30% 이하 과매도 탈출 시</option>
+                                </select>
+                                <input type="number" id="buyRsiVal" value="50" step="1">
+                            </div>
+                            <div class="form-group">
+                                <label>스토케스틱 %K 기준 %</label>
+                                <input type="number" id="buyStochVal" value="50" step="1">
+                            </div>
+                        </div>
+
+                        <!-- Sell Condition Group -->
+                        <div class="builder-card sell-rules">
+                            <h4>🔵 매도 화살표 포착 조건</h4>
+                            <div class="form-group">
+                                <label>이격도 (Disparity) 기준</label>
+                                <select id="sellDisparityOp">
+                                    <option value="gte">이상일 때 (과열 매도)</option>
+                                    <option value="lte">이하일 때 (하락 이탈)</option>
+                                </select>
+                                <input type="number" id="sellDisparityVal" value="105" step="0.5">
+                            </div>
+                            <div class="form-group">
+                                <label>RSI (14일) 기준 %</label>
+                                <select id="sellRsiOp">
+                                    <option value="crossDown">50% 하향 이탈 시</option>
+                                    <option value="gte">70% 이상 과매수 이탈 시</option>
+                                </select>
+                                <input type="number" id="sellRsiVal" value="50" step="1">
+                            </div>
+                            <div class="form-group">
+                                <label>스토케스틱 %K 기준 %</label>
+                                <input type="number" id="sellStochVal" value="50" step="1">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> 커스텀 전략 저장 및 적용</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Portfolio & Radar Chart Modal -->
+    <div class="modal-overlay hidden" id="portfolioModal">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <h3><i data-lucide="pie-chart"></i> 📊 나의 자산 포트폴리오 & 4차원 다각형 분석</h3>
+                <button type="button" class="modal-close" id="closePortfolioModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="portfolio-summary-bar">
+                    <div class="p-summary-item">
+                        <span>총 평가 자산</span>
+                        <strong id="totalAssetVal">₩0</strong>
+                    </div>
+                    <div class="p-summary-item">
+                        <span>총 매수 금액</span>
+                        <strong id="totalBuyVal">₩0</strong>
+                    </div>
+                    <div class="p-summary-item">
+                        <span>총 평가 손익</span>
+                        <strong id="totalReturnVal" class="up">₩0 (+0.0%)</strong>
+                    </div>
+                </div>
+
+                <div class="portfolio-grid">
+                    <div class="p-chart-box">
+                        <h4>보유 종목 비중 & 다각형(Radar) 손익 리포트</h4>
+                        <div class="p-chart-canvas-wrapper">
+                            <canvas id="portfolioRadarChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="p-list-box">
+                        <h4>보유 종목 현황 및 비중</h4>
+                        <div id="portfolioHoldingsList" class="mini-holdings-list"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Holdings Management Modal -->
+    <div class="modal-overlay hidden" id="holdingsModal">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <h3><i data-lucide="briefcase"></i> 💼 보유종목 상세 관리</h3>
+                <button type="button" class="modal-close" id="closeHoldingsModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="addHoldingForm" class="form-row-grid">
+                    <div class="form-group">
+                        <label>종목명/코드</label>
+                        <input type="text" id="holdingStockInput" placeholder="예: 005930, NVDA" required>
+                    </div>
+                    <div class="form-group">
+                        <label>평균 매수가</label>
+                        <input type="number" id="holdingBuyPrice" placeholder="매수가 입력" required>
+                    </div>
+                    <div class="form-group">
+                        <label>보유 수량</label>
+                        <input type="number" id="holdingQuantity" placeholder="수량 입력" required>
+                    </div>
+                    <div class="form-group form-btn-align">
+                        <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> 등록</button>
+                    </div>
+                </form>
+
+                <div class="table-responsive">
+                    <table class="data-table" id="holdingsTable">
+                        <thead>
+                            <tr>
+                                <th>종목명</th>
+                                <th>매수가</th>
+                                <th>현재가</th>
+                                <th>보유수량</th>
+                                <th>평가금액</th>
+                                <th>손익률</th>
+                                <th>삭제</th>
+                            </tr>
+                        </thead>
+                        <tbody id="holdingsTableBody">
+                            <!-- Dynamic rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Watchlist Modal -->
+    <div class="modal-overlay hidden" id="watchlistModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i data-lucide="star"></i> ⭐️ 나의 관심종목 실시간 트래커</h3>
+                <button type="button" class="modal-close" id="closeWatchlistModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="watchlist-items-container" id="watchlistItemsContainer">
+                    <!-- Dynamic watchlist cards -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. HOT Stocks Modal -->
+    <div class="modal-overlay hidden" id="hotStocksModal">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <h3><i data-lucide="flame"></i> 🔥 HOT 주식 실시간 랭킹 허브</h3>
+                <button type="button" class="modal-close" id="closeHotStocksModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="hot-tab-buttons">
+                    <button type="button" class="hot-tab active" data-hot-type="popular">🔥 인기 검색</button>
+                    <button type="button" class="hot-tab" data-hot-type="volume">📊 거래량 상위</button>
+                    <button type="button" class="hot-tab" data-hot-type="value">💰 거래대금 상위</button>
+                    <button type="button" class="hot-tab" data-hot-type="gainer">🚀 급등주 (상승)</button>
+                    <button type="button" class="hot-tab" data-hot-type="loser">📉 급락주 (하락)</button>
+                </div>
+                <div class="hot-ranking-grid" id="hotRankingGrid">
+                    <!-- Dynamic ranking cards -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. My Account & Admin Console Modal -->
+    <div class="modal-overlay hidden" id="myAccountModal">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <h3><i data-lucide="user-check"></i> 👤 내계정 & 회원 관리 콘솔</h3>
+                <button type="button" class="modal-close" id="closeMyAccountModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="profile-card">
+                    <h4>비밀번호 및 계정 정보 수정</h4>
+                    <form id="userProfileForm" class="profile-form-grid">
+                        <div class="form-group">
+                            <label>아이디</label>
+                            <input type="text" id="profUsername" readonly class="input-readonly">
+                        </div>
+                        <div class="form-group">
+                            <label>새 비밀번호</label>
+                            <input type="password" id="profNewPassword" placeholder="변경할 비밀번호 입력 (4자 이상)">
+                        </div>
+                        <div class="form-group">
+                            <label>닉네임 / 성명</label>
+                            <input type="text" id="profNickname" placeholder="닉네임 입력">
+                        </div>
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> 정보 & 비밀번호 저장</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="admin-console-section hidden" id="adminConsoleSection">
+                    <h4><i data-lucide="shield"></i> 🛡️ 최고관리자 가입 회원 관리 콘솔</h4>
+                    <div class="table-responsive">
+                        <table class="data-table" id="adminUsersTable">
+                            <thead>
+                                <tr>
+                                    <th>아이디</th>
+                                    <th>닉네임</th>
+                                    <th>가입일</th>
+                                    <th>권한</th>
+                                    <th>비밀번호 초기화</th>
+                                    <th>계정 상태</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminUsersTableBody">
+                                <!-- Admin user list -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. Live Investor Chatroom Modal -->
+    <div class="modal-overlay hidden" id="liveChatModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i data-lucide="message-square"></i> 💬 실시간 투자자 소통방</h3>
+                <button type="button" class="modal-close" id="closeLiveChatModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="chat-messages-box" id="chatMessagesBox">
+                    <div class="chat-msg system">
+                        <span>[KAMA 시스템] 실시간 투자자 소통방에 오신 것을 환영합니다!</span>
+                    </div>
+                </div>
+                <form id="chatForm" class="chat-input-bar">
+                    <input type="text" id="chatInput" placeholder="투자 전략이나 종목 의견을 나누어 보세요..." required>
+                    <button type="submit" class="btn btn-primary"><i data-lucide="send"></i> 전송</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8. Community Strategy Board Modal -->
+    <div class="modal-overlay hidden" id="communityBoardModal">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <h3><i data-lucide="clipboard-list"></i> 📋 투자 전략 게시판</h3>
+                <button type="button" class="modal-close" id="closeCommunityBoardModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="board-actions-bar">
+                    <button type="button" class="btn btn-primary btn-sm" id="openNewPostBtn"><i data-lucide="edit-3"></i> 글쓰기</button>
+                </div>
+                
+                <div class="new-post-box hidden" id="newPostBox">
+                    <form id="newPostForm">
+                        <div class="form-group">
+                            <input type="text" id="postTitle" placeholder="글 제목을 입력하세요" required>
+                        </div>
+                        <div class="form-group">
+                            <textarea id="postContent" rows="4" placeholder="KAMA 시그널 분석이나 나만의 투자 아이디어를 공유해 보세요..." required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary"><i data-lucide="check"></i> 게시글 등록</button>
+                            <button type="button" class="btn btn-outline" id="cancelPostBtn">취소</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="board-posts-list" id="boardPostsList">
+                    <!-- Dynamic posts list -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth Gateway Modal (Login / Signup) -->
+    <div class="modal-overlay hidden" id="authGatewayModal">
+        <div class="modal-card modal-sm">
+            <div class="modal-header">
+                <h3><i data-lucide="lock"></i> KAMA 인베스트먼트 로그인</h3>
+                <button type="button" class="modal-close" id="closeAuthModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="auth-tabs">
+                    <button type="button" class="auth-tab active" id="authTabLogin">로그인</button>
+                    <button type="button" class="auth-tab" id="authTabSignup">회원가입</button>
+                </div>
+
+                <div class="quick-login-banner">
+                    <span class="quick-login-label">⚡ 원클릭 테스트 로그인:</span>
+                    <div class="quick-login-buttons">
+                        <button type="button" class="btn btn-xs btn-outline" id="quickLoginAdminBtn">🔑 최고관리자 (admin)</button>
+                        <button type="button" class="btn btn-xs btn-outline" id="quickLoginUserBtn">👤 일반회원 (user1)</button>
+                    </div>
+                </div>
+
+                <form id="modalLoginForm" class="auth-form-body">
+                    <div class="form-group">
+                        <label>아이디 (기본: admin / user1)</label>
+                        <input type="text" id="loginUsername" placeholder="아이디 입력" required value="admin">
+                    </div>
+                    <div class="form-group">
+                        <label>비밀번호 (기본: admin123 / user1234)</label>
+                        <input type="password" id="loginPassword" placeholder="비밀번호 입력" required value="admin123">
+                    </div>
+                    <div id="loginErrorMsg" class="error-msg hidden"></div>
+                    <button type="submit" class="btn btn-primary btn-block"><i data-lucide="log-in"></i> 접속하기</button>
+                </form>
+
+                <form id="modalSignupForm" class="auth-form-body hidden">
+                    <div class="form-group">
+                        <label>아이디 *</label>
+                        <input type="text" id="signupUsername" placeholder="3자 이상 아이디" required>
+                    </div>
+                    <div class="form-group">
+                        <label>비밀번호 *</label>
+                        <input type="password" id="signupPassword" placeholder="4자 이상 비밀번호" required>
+                    </div>
+                    <div class="form-group">
+                        <label>닉네임 / 성명</label>
+                        <input type="text" id="signupNickname" placeholder="사용할 닉네임">
+                    </div>
+                    <div id="signupErrorMsg" class="error-msg hidden"></div>
+                    <button type="submit" class="btn btn-primary btn-block"><i data-lucide="user-plus"></i> 회원가입 완료</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Navigation -->
+    <nav class="mobile-bottom-nav" id="mobileBottomNav">
+        <button type="button" class="mobile-nav-item active" id="mobileNavHome">
+            <i data-lucide="search"></i>
+            <span>검색</span>
+        </button>
+        <button type="button" class="mobile-nav-item" id="mobileNavChart">
+            <i data-lucide="line-chart"></i>
+            <span>차트엔진</span>
+        </button>
+        <button type="button" class="mobile-nav-item" id="mobileNavWatchlist">
+            <i data-lucide="star"></i>
+            <span>관심종목</span>
+        </button>
+        <button type="button" class="mobile-nav-item" id="mobileNavHot">
+            <i data-lucide="flame"></i>
+            <span>HOT주식</span>
+        </button>
+        <button type="button" class="mobile-nav-item" id="mobileNavTile">
+            <i data-lucide="layout-grid"></i>
+            <span>타일메뉴</span>
+        </button>
+    </nav>
+
+    <!-- Global Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Application Engine Script -->
+    <script src="app.js"></script>
+</body>
+</html>

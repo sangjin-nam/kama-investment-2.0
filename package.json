@@ -1,0 +1,13 @@
+{
+  "name": "kama-investment",
+  "version": "2.5.0",
+  "description": "KAMA Investment Platform - Next Gen Asset & Stock Indicator Dashboard",
+  "main": "app.js",
+  "scripts": {
+    "start": "powershell -ExecutionPolicy Bypass -File server.ps1"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "firebase-tools": "^13.0.0"
+  }
+}

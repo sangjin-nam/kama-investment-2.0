@@ -1,0 +1,17 @@
+# Firebase cache/config
+.firebase/
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+firebase-debug.log*
+
+# Node modules
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Broken fuse git folder
+.git_broken_fuse/
