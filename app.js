@@ -1422,6 +1422,9 @@
         const canvas = document.getElementById('mainStockChart');
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
+        if (state.resizeDrawingCanvas) {
+            state.resizeDrawingCanvas();
+        }
         if (state.charts.main) {
             state.charts.main.destroy();
             state.charts.main = null;
@@ -1807,12 +1810,15 @@
             canvas.height = rect.height;
             redrawAll();
         }
+
+        state.resizeDrawingCanvas = resizeDrawingCanvas;
         
         window.addEventListener('resize', resizeDrawingCanvas);
         setTimeout(resizeDrawingCanvas, 500);
 
         document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
             btn.addEventListener('click', () => {
+                resizeDrawingCanvas();
                 document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 state.activeTool = btn.getAttribute('data-tool');
