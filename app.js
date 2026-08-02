@@ -51,6 +51,12 @@
         return state.candles.slice(Math.max(0, state.candles.length - count));
     }
 
+    const imgBuy = new Image(18, 18);
+    imgBuy.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23ff3b69" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>';
+
+    const imgSell = new Image(18, 18);
+    imgSell.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%2338bdf8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>';
+
     // Hot Stocks Preset Dataset
     const HOT_STOCKS = {
         popular: [
@@ -836,9 +842,14 @@
         } else if (state.currentStrategy === 'kama3') {
             for (let i = 14; i < closes.length; i++) {
                 const high14 = Math.max(...state.candles.slice(i - 14, i).map(c => c.high));
+                const low14 = Math.min(...state.candles.slice(i - 14, i).map(c => c.low));
                 const dailyAvg = (state.candles[i].high + state.candles[i].low + state.candles[i].close) / 3;
-                if (dailyAvg > high14 && closes[i - 1] <= high14) {
-                    state.signals.push({ index: i, type: 'BUY', date: dates[i], price: closes[i], desc: '일일평균가 14일 최고가 추세선 돌파' });
+                const prevDailyAvg = (state.candles[i - 1].high + state.candles[i - 1].low + state.candles[i - 1].close) / 3;
+
+                if (dailyAvg > high14 && prevDailyAvg <= high14) {
+                    state.signals.push({ index: i, type: 'BUY', date: dates[i], price: closes[i], desc: '일일평균가 14일 최고가 추세선 상향 돌파' });
+                } else if (dailyAvg < low14 && prevDailyAvg >= low14) {
+                    state.signals.push({ index: i, type: 'SELL', date: dates[i], price: closes[i], desc: '일일평균가 14일 최저가 추세선 하향 이탈' });
                 }
             }
         }
@@ -1357,13 +1368,24 @@
         }
 
         if (state.currentStrategy === 'kama3') {
-            const dailyAvg = visibleCandles.map(c => (c.high + c.low + c.close) / 3);
-            const high14 = visibleCandles.map((c, i) => {
+            const fullDailyAvg = state.candles.map(c => (c.high + c.low + c.close) / 3);
+            const fullHigh14 = state.candles.map((c, i) => {
                 if (i < 14) return c.high;
-                return Math.max(...visibleCandles.slice(i - 14, i).map(x => x.high));
+                return Math.max(...state.candles.slice(i - 14, i).map(x => x.high));
             });
-            datasets.push({ label: '일일평균가', data: dailyAvg, borderColor: '#10b981', borderWidth: 1.5, pointRadius: 0, type: 'line' });
-            datasets.push({ label: '14일 최고가 연장선', data: high14, borderColor: '#ff3b69', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, type: 'line' });
+            const fullLow14 = state.candles.map((c, i) => {
+                if (i < 14) return c.low;
+                return Math.min(...state.candles.slice(i - 14, i).map(x => x.low));
+            });
+
+            const startIdx = state.candles.length - visibleCandles.length;
+            const slicedDailyAvg = fullDailyAvg.slice(startIdx);
+            const slicedHigh14 = fullHigh14.slice(startIdx);
+            const slicedLow14 = fullLow14.slice(startIdx);
+
+            datasets.push({ label: '일일평균가', data: slicedDailyAvg, borderColor: '#10b981', borderWidth: 1.5, pointRadius: 0, type: 'line' });
+            datasets.push({ label: '14일 최고가 연장선', data: slicedHigh14, borderColor: '#ff3b69', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, type: 'line' });
+            datasets.push({ label: '14일 최저가 연장선', data: slicedLow14, borderColor: '#38bdf8', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, type: 'line' });
         }
 
         // Plot buy/sell signals on chart
@@ -1384,8 +1406,9 @@
             data: signalBuyData,
             borderColor: 'transparent',
             backgroundColor: '#ff3b69',
-            pointRadius: 6,
-            pointHoverRadius: 8,
+            pointStyle: imgBuy,
+            pointRadius: 10,
+            pointHoverRadius: 12,
             showLine: false,
             type: 'line'
         });
@@ -1394,8 +1417,9 @@
             data: signalSellData,
             borderColor: 'transparent',
             backgroundColor: '#38bdf8',
-            pointRadius: 6,
-            pointHoverRadius: 8,
+            pointStyle: imgSell,
+            pointRadius: 10,
+            pointHoverRadius: 12,
             showLine: false,
             type: 'line'
         });
