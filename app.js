@@ -46,6 +46,8 @@
             count = 20;
         } else if (state.timeframeRange === '3m') {
             count = 60;
+        } else if (state.timeframeRange === '6m') {
+            count = 120;
         } else if (state.timeframeRange === '1y') {
             count = 250;
         }
