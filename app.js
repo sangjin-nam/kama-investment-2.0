@@ -31,6 +31,7 @@
         alarms: [],
         chartType: 'line',
         timeframeRange: 'max',
+        chartScrollOffset: 0,
         charts: {
             main: null,
             sub: {},
@@ -48,7 +49,13 @@
         } else if (state.timeframeRange === '1y') {
             count = 250;
         }
-        return state.candles.slice(Math.max(0, state.candles.length - count));
+        const end = state.candles.length - (state.chartScrollOffset || 0);
+        const start = Math.max(0, end - count);
+        if (start < 0) {
+            state.chartScrollOffset = Math.max(0, state.candles.length - count);
+            return state.candles.slice(0, Math.min(count, state.candles.length));
+        }
+        return state.candles.slice(start, end);
     }
 
     const imgBuy = new Image(18, 18);
@@ -113,6 +120,7 @@
         bindUIEvents();
         initSearchAutocomplete();
         initDrawingEngine();
+        initChartPanningEngine();
         initFlipBook();
         initRealtimePricePoller();
 
@@ -124,6 +132,83 @@
         if (window.lucide) {
             window.lucide.createIcons();
         }
+    }
+
+    function initChartPanningEngine() {
+        const container = document.getElementById('chartCanvasContainer');
+        if (!container) return;
+
+        let isPanning = false;
+        let panStartX = 0;
+        let initialScrollOffset = 0;
+
+        container.style.cursor = 'grab';
+
+        container.addEventListener('mousedown', (e) => {
+            if (state.activeTool) return;
+            isPanning = true;
+            panStartX = e.clientX;
+            initialScrollOffset = state.chartScrollOffset || 0;
+            container.style.cursor = 'grabbing';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isPanning) return;
+            const deltaX = e.clientX - panStartX;
+            const visibleCount = getFilteredCandles().length;
+            const containerWidth = container.getBoundingClientRect().width;
+            const pxPerCandle = containerWidth / (visibleCount || 50);
+
+            // Panning formula: positive deltaX means scrolling into history (increasing offset)
+            const candleDelta = Math.round(deltaX / pxPerCandle);
+            let newOffset = initialScrollOffset + candleDelta;
+
+            const maxOffset = Math.max(0, state.candles.length - visibleCount);
+            newOffset = Math.max(0, Math.min(maxOffset, newOffset));
+
+            if (newOffset !== state.chartScrollOffset) {
+                state.chartScrollOffset = newOffset;
+                recalculateSignalsAndDraw();
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isPanning) {
+                isPanning = false;
+                container.style.cursor = state.activeTool ? 'crosshair' : 'grab';
+            }
+        });
+
+        // Touch support for mobile devices
+        container.addEventListener('touchstart', (e) => {
+            if (state.activeTool || e.touches.length === 0) return;
+            isPanning = true;
+            panStartX = e.touches[0].clientX;
+            initialScrollOffset = state.chartScrollOffset || 0;
+        });
+
+        container.addEventListener('touchmove', (e) => {
+            if (!isPanning || e.touches.length === 0) return;
+            const deltaX = e.touches[0].clientX - panStartX;
+            const visibleCount = getFilteredCandles().length;
+            const containerWidth = container.getBoundingClientRect().width;
+            const pxPerCandle = containerWidth / (visibleCount || 50);
+
+            const candleDelta = Math.round(deltaX / pxPerCandle);
+            let newOffset = initialScrollOffset + candleDelta;
+
+            const maxOffset = Math.max(0, state.candles.length - visibleCount);
+            newOffset = Math.max(0, Math.min(maxOffset, newOffset));
+
+            if (newOffset !== state.chartScrollOffset) {
+                state.chartScrollOffset = newOffset;
+                recalculateSignalsAndDraw();
+            }
+        });
+
+        container.addEventListener('touchend', () => {
+            isPanning = false;
+        });
     }
 
     /* ==========================================================================
@@ -693,6 +778,7 @@
             finalName = `${flag} ${finalName}`;
         }
 
+        state.chartScrollOffset = 0;
         state.candles = fetchedData.candles || [];
         state.extendedHours = fetchedData.extendedHours || null;
         state.currentSymbol = code;
@@ -1705,6 +1791,8 @@
             state.activeTool = null;
             canvas.classList.remove('active');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const container = document.getElementById('chartCanvasContainer');
+            if (container) container.style.cursor = 'grab';
         });
 
         canvas.addEventListener('mousedown', (e) => {
