@@ -29,12 +29,27 @@
         activeTool: null,
         drawings: [],
         alarms: [],
+        chartType: 'line',
+        timeframeRange: 'max',
         charts: {
             main: null,
             sub: {},
             grid: {}
         }
     };
+
+    function getFilteredCandles() {
+        if (state.candles.length === 0) return [];
+        let count = state.candles.length;
+        if (state.timeframeRange === '1m') {
+            count = 20;
+        } else if (state.timeframeRange === '3m') {
+            count = 60;
+        } else if (state.timeframeRange === '1y') {
+            count = 250;
+        }
+        return state.candles.slice(Math.max(0, state.candles.length - count));
+    }
 
     // Hot Stocks Preset Dataset
     const HOT_STOCKS = {
@@ -341,6 +356,30 @@
                 document.querySelectorAll('.capsule-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 state.currentStrategy = btn.getAttribute('data-strategy');
+                recalculateSignalsAndDraw();
+            });
+        });
+
+        // Chart Type Switcher Listeners
+        document.getElementById('btnLineChart').addEventListener('click', () => {
+            document.getElementById('btnLineChart').classList.add('active');
+            document.getElementById('btnCandleChart').classList.remove('active');
+            state.chartType = 'line';
+            renderMainChart();
+        });
+        document.getElementById('btnCandleChart').addEventListener('click', () => {
+            document.getElementById('btnCandleChart').classList.add('active');
+            document.getElementById('btnLineChart').classList.remove('active');
+            state.chartType = 'candle';
+            renderMainChart();
+        });
+
+        // Timeframe Range Switcher Listeners
+        document.querySelectorAll('.timeframe-range-group button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.timeframe-range-group button').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state.timeframeRange = btn.getAttribute('data-range');
                 recalculateSignalsAndDraw();
             });
         });
@@ -1124,37 +1163,54 @@
             state.charts.main = null;
         }
 
-        const labels = state.candles.map(c => c.date);
-        const closes = state.candles.map(c => c.close);
+        const visibleCandles = getFilteredCandles();
+        const labels = visibleCandles.map(c => c.date);
+        const closes = visibleCandles.map(c => c.close);
 
-        const datasets = [{
-            label: `${state.currentStockName} (종가)`,
-            data: closes,
-            borderColor: '#00f2fe',
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.1
-        }];
+        let datasets = [];
+
+        if (state.chartType === 'candle') {
+            datasets.push({
+                label: `${state.currentStockName} (캔들)`,
+                type: 'bar',
+                data: visibleCandles.map(c => [c.open, c.close]),
+                backgroundColor: visibleCandles.map(c => c.close >= c.open ? '#ff3b69' : '#38bdf8'),
+                borderColor: visibleCandles.map(c => c.close >= c.open ? '#ff3b69' : '#38bdf8'),
+                borderWidth: 1.5,
+                barPercentage: 0.6
+            });
+        } else {
+            datasets.push({
+                label: `${state.currentStockName} (종가)`,
+                type: 'line',
+                data: closes,
+                borderColor: '#00f2fe',
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0.1
+            });
+        }
 
         if (state.currentStrategy === 'kama3') {
-            const dailyAvg = state.candles.map(c => (c.high + c.low + c.close) / 3);
-            const high14 = state.candles.map((c, i) => {
+            const dailyAvg = visibleCandles.map(c => (c.high + c.low + c.close) / 3);
+            const high14 = visibleCandles.map((c, i) => {
                 if (i < 14) return c.high;
-                return Math.max(...state.candles.slice(i - 14, i).map(x => x.high));
+                return Math.max(...visibleCandles.slice(i - 14, i).map(x => x.high));
             });
-            datasets.push({ label: '일일평균가', data: dailyAvg, borderColor: '#10b981', borderWidth: 1.5, pointRadius: 0 });
-            datasets.push({ label: '14일 최고가 연장선', data: high14, borderColor: '#ff3b69', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0 });
+            datasets.push({ label: '일일평균가', data: dailyAvg, borderColor: '#10b981', borderWidth: 1.5, pointRadius: 0, type: 'line' });
+            datasets.push({ label: '14일 최고가 연장선', data: high14, borderColor: '#ff3b69', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, type: 'line' });
         }
 
         // Plot buy/sell signals on chart
-        const signalBuyData = new Array(state.candles.length).fill(null);
-        const signalSellData = new Array(state.candles.length).fill(null);
+        const signalBuyData = new Array(visibleCandles.length).fill(null);
+        const signalSellData = new Array(visibleCandles.length).fill(null);
         state.signals.forEach(s => {
-            if (s.index >= 0 && s.index < state.candles.length) {
+            const visIdx = visibleCandles.findIndex(c => c.date === s.date);
+            if (visIdx !== -1) {
                 if (s.type === 'BUY') {
-                    signalBuyData[s.index] = closes[s.index];
+                    signalBuyData[visIdx] = visibleCandles[visIdx].close;
                 } else if (s.type === 'SELL') {
-                    signalSellData[s.index] = closes[s.index];
+                    signalSellData[visIdx] = visibleCandles[visIdx].close;
                 }
             }
         });
@@ -1165,7 +1221,8 @@
             backgroundColor: '#ff3b69',
             pointRadius: 6,
             pointHoverRadius: 8,
-            showLine: false
+            showLine: false,
+            type: 'line'
         });
         datasets.push({
             label: '매도 추천',
@@ -1174,12 +1231,39 @@
             backgroundColor: '#38bdf8',
             pointRadius: 6,
             pointHoverRadius: 8,
-            showLine: false
+            showLine: false,
+            type: 'line'
         });
 
+        const candlestickPlugin = {
+            id: 'candlestickWicks',
+            afterDatasetsDraw: (chart) => {
+                if (state.chartType !== 'candle') return;
+                const ctx = chart.ctx;
+                const meta = chart.getDatasetMeta(0);
+                visibleCandles.forEach((c, i) => {
+                    const model = meta.data[i];
+                    if (!model) return;
+                    const x = model.x;
+                    const yScale = chart.scales.y;
+                    const yHigh = yScale.getPixelForValue(c.high);
+                    const yLow = yScale.getPixelForValue(c.low);
+                    ctx.save();
+                    ctx.strokeStyle = c.close >= c.open ? '#ff3b69' : '#38bdf8';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(x, yHigh);
+                    ctx.lineTo(x, yLow);
+                    ctx.stroke();
+                    ctx.restore();
+                });
+            }
+        };
+
         state.charts.main = new Chart(ctx, {
-            type: 'line',
+            type: state.chartType === 'candle' ? 'bar' : 'line',
             data: { labels, datasets },
+            plugins: [candlestickPlugin],
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -1197,46 +1281,114 @@
         });
     }
 
+    function calculateEMA(data, period) {
+        if (data.length === 0) return [];
+        const ema = new Array(data.length).fill(data[0]);
+        const k = 2 / (period + 1);
+        for (let i = 1; i < data.length; i++) {
+            ema[i] = data[i] * k + ema[i - 1] * (1 - k);
+        }
+        return ema;
+    }
+
+    function calculateMACD(closes) {
+        if (closes.length === 0) return { macd: [], signal: [], hist: [] };
+        const ema12 = calculateEMA(closes, 12);
+        const ema26 = calculateEMA(closes, 26);
+        
+        const macdLine = new Array(closes.length);
+        for (let i = 0; i < closes.length; i++) {
+            macdLine[i] = ema12[i] - ema26[i];
+        }
+        
+        const signalLine = calculateEMA(macdLine, 9);
+        
+        const hist = new Array(closes.length);
+        for (let i = 0; i < closes.length; i++) {
+            hist[i] = macdLine[i] - signalLine[i];
+        }
+        
+        return { macd: macdLine, signal: signalLine, hist };
+    }
+
     function buildSubChartDataset(page) {
-        const labels = state.candles.map(c => c.date);
+        const visibleCandles = getFilteredCandles();
+        const startIdx = state.candles.length - visibleCandles.length;
+        
+        const labels = visibleCandles.map(c => c.date);
         const closes = state.candles.map(c => c.close);
-        const volumes = state.candles.map(c => c.volume);
+        const visibleVolumes = visibleCandles.map(c => c.volume);
 
         if (page === 1) {
-            return { labels, datasets: [{ label: 'RSI (14)', data: calculateRSI(closes, 14), borderColor: '#ff3b69', borderWidth: 1.5, pointRadius: 0 }] };
+            const rsi = calculateRSI(closes, 14).slice(startIdx);
+            return { labels, datasets: [{ label: 'RSI (14)', data: rsi, borderColor: '#ff3b69', borderWidth: 1.5, pointRadius: 0 }] };
         } else if (page === 2) {
-            const macd = closes.map((v, idx) => Math.sin(idx / 5) * 10);
-            return { labels, datasets: [{ label: 'MACD', data: macd, type: 'bar', backgroundColor: macd.map(v => v >= 0 ? '#ff3b69' : '#38bdf8') }] };
+            const { macd, signal, hist } = calculateMACD(closes);
+            const histSliced = hist.slice(startIdx);
+            return {
+                labels,
+                datasets: [
+                    {
+                        label: 'MACD Histogram',
+                        data: histSliced,
+                        type: 'bar',
+                        backgroundColor: histSliced.map(v => v >= 0 ? '#ff3b69' : '#38bdf8'),
+                        borderWidth: 0,
+                        barPercentage: 0.8
+                    },
+                    {
+                        label: 'MACD Line',
+                        data: macd.slice(startIdx),
+                        borderColor: '#00f2fe',
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        fill: false
+                    },
+                    {
+                        label: 'Signal Line',
+                        data: signal.slice(startIdx),
+                        borderColor: '#a78bfa',
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        fill: false
+                    }
+                ]
+            };
         } else if (page === 3) {
+            const disp5 = calculateDisparity(closes, 5).slice(startIdx);
+            const disp20 = calculateDisparity(closes, 20).slice(startIdx);
             return {
                 labels, datasets: [
-                    { label: '이격도 5일', data: calculateDisparity(closes, 5), borderColor: '#00f2fe', borderWidth: 1, pointRadius: 0 },
-                    { label: '이격도 20일', data: calculateDisparity(closes, 20), borderColor: '#a855f7', borderWidth: 1.5, pointRadius: 0 }
+                    { label: '이격도 5일', data: disp5, borderColor: '#00f2fe', borderWidth: 1, pointRadius: 0 },
+                    { label: '이격도 20일', data: disp20, borderColor: '#a855f7', borderWidth: 1.5, pointRadius: 0 }
                 ]
             };
         } else if (page === 4) {
-            return { labels, datasets: [{ label: '거래량', data: volumes, type: 'bar', backgroundColor: 'rgba(0, 242, 254, 0.4)' }] };
+            return { labels, datasets: [{ label: '거래량', data: visibleVolumes, type: 'bar', backgroundColor: 'rgba(0, 242, 254, 0.4)' }] };
         } else if (page === 5) {
             const ma20 = calculateMA(closes, 20);
-            const pctB = closes.map((v, i) => i < 20 ? 0.5 : (v - ma20[i] * 0.95) / (ma20[i] * 0.1));
+            const pctB = closes.map((v, i) => i < 20 ? 0.5 : (v - ma20[i] * 0.95) / (ma20[i] * 0.1)).slice(startIdx);
             return { labels, datasets: [{ label: '볼린저 %B', data: pctB, borderColor: '#fbbf24', borderWidth: 1.5, pointRadius: 0 }] };
         } else if (page === 6) {
-            return { labels, datasets: [{ label: 'CCI (14)', data: calculateCCI(state.candles, 14), borderColor: '#ec4899', borderWidth: 1.5, pointRadius: 0 }] };
+            const cci = calculateCCI(state.candles, 14).slice(startIdx);
+            return { labels, datasets: [{ label: 'CCI (14)', data: cci, borderColor: '#ec4899', borderWidth: 1.5, pointRadius: 0 }] };
         } else if (page === 7) {
             const ichi = calculateIchimoku(state.candles);
             return {
                 labels, datasets: [
-                    { label: '전환선(9)', data: ichi.tenkan, borderColor: '#00f2fe', borderWidth: 1.5, pointRadius: 0 },
-                    { label: '기준선(26)', data: ichi.kijun, borderColor: '#a855f7', borderWidth: 1.5, pointRadius: 0 }
+                    { label: '전환선(9)', data: ichi.tenkan.slice(startIdx), borderColor: '#00f2fe', borderWidth: 1.5, pointRadius: 0 },
+                    { label: '기준선(26)', data: ichi.kijun.slice(startIdx), borderColor: '#a855f7', borderWidth: 1.5, pointRadius: 0 }
                 ]
             };
         } else if (page === 8) {
-            const adx = calculateRSI(closes, 14).map(v => Math.abs(v - 50) * 1.8);
+            const adx = calculateRSI(closes, 14).map(v => Math.abs(v - 50) * 1.8).slice(startIdx);
             return { labels, datasets: [{ label: 'ADX 추세강도', data: adx, borderColor: '#10b981', borderWidth: 1.5, pointRadius: 0 }] };
         } else if (page === 9) {
-            return { labels, datasets: [{ label: 'MFI (14)', data: calculateRSI(closes, 14), borderColor: '#38bdf8', borderWidth: 1.5, pointRadius: 0 }] };
+            const mfi = calculateRSI(closes, 14).slice(startIdx);
+            return { labels, datasets: [{ label: 'MFI (14)', data: mfi, borderColor: '#38bdf8', borderWidth: 1.5, pointRadius: 0 }] };
         } else {
-            return { labels, datasets: [{ label: 'ATR (14)', data: calculateATR(state.candles, 14), borderColor: '#fb923c', borderWidth: 1.5, pointRadius: 0 }] };
+            const atr = calculateATR(state.candles, 14).slice(startIdx);
+            return { labels, datasets: [{ label: 'ATR (14)', data: atr, borderColor: '#fb923c', borderWidth: 1.5, pointRadius: 0 }] };
         }
     }
 
@@ -1318,21 +1470,141 @@
        6. Interactive Drawing & Fullscreen
        ========================================================================== */
     function initDrawingEngine() {
+        const canvas = document.getElementById('drawingCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let startX = 0, startY = 0;
+
+        function resizeDrawingCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            redrawAll();
+        }
+        
+        window.addEventListener('resize', resizeDrawingCanvas);
+        setTimeout(resizeDrawingCanvas, 500);
+
         document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 state.activeTool = btn.getAttribute('data-tool');
-                document.getElementById('drawingCanvas').classList.add('active');
+                canvas.classList.add('active');
             });
         });
 
         document.getElementById('clearDrawingBtn').addEventListener('click', () => {
             state.drawings = [];
-            const canvas = document.getElementById('drawingCanvas');
-            const ctx = canvas.getContext('2d');
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+            state.activeTool = null;
+            canvas.classList.remove('active');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         });
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (!state.activeTool) return;
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing || !state.activeTool) return;
+            const rect = canvas.getBoundingClientRect();
+            const currX = e.clientX - rect.left;
+            const currY = e.clientY - rect.top;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            redrawAll();
+            drawShape(ctx, state.activeTool, startX, startY, currX, currY);
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (!isDrawing || !state.activeTool) return;
+            isDrawing = false;
+            const rect = canvas.getBoundingClientRect();
+            const currX = e.clientX - rect.left;
+            const currY = e.clientY - rect.top;
+
+            state.drawings.push({
+                tool: state.activeTool,
+                x1: startX, y1: startY,
+                x2: currX, y2: currY
+            });
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            redrawAll();
+        });
+
+        // Touch support for mobile drawing
+        canvas.addEventListener('touchstart', (e) => {
+            if (!state.activeTool || e.touches.length === 0) return;
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            startX = e.touches[0].clientX - rect.left;
+            startY = e.touches[0].clientY - rect.top;
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (!isDrawing || !state.activeTool || e.touches.length === 0) return;
+            const rect = canvas.getBoundingClientRect();
+            const currX = e.touches[0].clientX - rect.left;
+            const currY = e.touches[0].clientY - rect.top;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            redrawAll();
+            drawShape(ctx, state.activeTool, startX, startY, currX, currY);
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            if (!isDrawing || !state.activeTool) return;
+            isDrawing = false;
+            // Use last known touch coordinates or just finish
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            redrawAll();
+        });
+
+        function drawShape(context, tool, x1, y1, x2, y2) {
+            context.strokeStyle = '#00f2fe';
+            context.lineWidth = 2;
+            context.fillStyle = 'rgba(0, 242, 254, 0.1)';
+            context.beginPath();
+
+            if (tool === 'trendline') {
+                context.moveTo(x1, y1);
+                context.lineTo(x2, y2);
+                context.stroke();
+            } else if (tool === 'horizontal') {
+                context.moveTo(0, y1);
+                context.lineTo(canvas.width, y1);
+                context.stroke();
+            } else if (tool === 'box') {
+                context.rect(x1, y1, x2 - x1, y2 - y1);
+                context.fill();
+                context.stroke();
+            } else if (tool === 'fibonacci') {
+                const dy = y2 - y1;
+                const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+                levels.forEach(lvl => {
+                    const y = y1 + dy * lvl;
+                    context.moveTo(0, y);
+                    context.lineTo(canvas.width, y);
+                    context.stroke();
+                    context.fillStyle = '#cbd5e1';
+                    context.font = '10px sans-serif';
+                    context.fillText(`${(lvl * 100).toFixed(1)}%`, 10, y - 4);
+                });
+            }
+        }
+
+        function redrawAll() {
+            state.drawings.forEach(d => {
+                drawShape(ctx, d.tool, d.x1, d.y1, d.x2, d.y2);
+            });
+        }
     }
 
     function toggleChartFullscreen() {
