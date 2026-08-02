@@ -1377,15 +1377,28 @@
                 if (i < 14) return c.low;
                 return Math.min(...state.candles.slice(i - 14, i).map(x => x.low));
             });
+            const fullAvg14 = state.candles.map((c, i) => {
+                if (i < 14) {
+                    const sub = state.candles.slice(0, i + 1);
+                    const avgs = sub.map(x => (x.high + x.low + x.close) / 3);
+                    return avgs.reduce((a, b) => a + b, 0) / avgs.length;
+                } else {
+                    const sub = state.candles.slice(i - 14, i);
+                    const avgs = sub.map(x => (x.high + x.low + x.close) / 3);
+                    return avgs.reduce((a, b) => a + b, 0) / 14;
+                }
+            });
 
             const startIdx = state.candles.length - visibleCandles.length;
             const slicedDailyAvg = fullDailyAvg.slice(startIdx);
             const slicedHigh14 = fullHigh14.slice(startIdx);
             const slicedLow14 = fullLow14.slice(startIdx);
+            const slicedAvg14 = fullAvg14.slice(startIdx);
 
             datasets.push({ label: '일일평균가', data: slicedDailyAvg, borderColor: '#10b981', borderWidth: 1.5, pointRadius: 0, type: 'line' });
             datasets.push({ label: '14일 최고가 연장선', data: slicedHigh14, borderColor: '#ff3b69', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, type: 'line' });
             datasets.push({ label: '14일 최저가 연장선', data: slicedLow14, borderColor: '#38bdf8', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, type: 'line' });
+            datasets.push({ label: '14일 평균가 연장선', data: slicedAvg14, borderColor: '#fbbf24', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, type: 'line' });
         }
 
         // Plot buy/sell signals on chart
@@ -1404,9 +1417,10 @@
         datasets.push({
             label: '매수 추천',
             data: signalBuyData,
-            borderColor: 'transparent',
+            borderColor: '#ff3b69',
             backgroundColor: '#ff3b69',
-            pointStyle: imgBuy,
+            pointStyle: 'crossRot',
+            borderWidth: 3,
             pointRadius: 10,
             pointHoverRadius: 12,
             showLine: false,
@@ -1415,9 +1429,10 @@
         datasets.push({
             label: '매도 추천',
             data: signalSellData,
-            borderColor: 'transparent',
+            borderColor: '#38bdf8',
             backgroundColor: '#38bdf8',
-            pointStyle: imgSell,
+            pointStyle: 'crossRot',
+            borderWidth: 3,
             pointRadius: 10,
             pointHoverRadius: 12,
             showLine: false,
