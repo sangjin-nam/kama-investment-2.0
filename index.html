@@ -229,6 +229,9 @@
                     <button type="button" class="capsule-btn" data-strategy="kama3">
                         🔴🔵 KAMA3 (14일고점 & 스토3일MA)
                     </button>
+                    <button type="button" class="capsule-btn" data-strategy="kama4">
+                        🤖 AI 반복 패턴 매칭
+                    </button>
                     <button type="button" class="capsule-btn" data-strategy="bollinger">
                         📊 볼린저밴드 + RSI
                     </button>
@@ -290,6 +293,38 @@
 
                     <div class="scrubber-mode-toggle">
                         <button type="button" class="btn btn-xs btn-outline active" id="togglePinnedModeBtn">📌 최신 시그널 고정</button>
+                    </div>
+                </div>
+
+                <!-- AI Pattern Matching Analysis Panel -->
+                <div class="ai-pattern-panel hidden" id="aiPatternPanel">
+                    <div class="ai-panel-header">
+                        <h4><i data-lucide="brain-circuit" class="ai-icon"></i> 🤖 AI 퀀트 패턴 매칭 분석 리포트</h4>
+                        <span class="ai-accuracy-badge" id="aiPatternAccuracy">매칭 신뢰도: --%</span>
+                    </div>
+                    <div class="ai-panel-grid">
+                        <div class="ai-stat-card">
+                            <span class="stat-label">유사 패턴 발견 횟수</span>
+                            <span class="stat-val" id="aiPatternCount">-- 회</span>
+                        </div>
+                        <div class="ai-stat-card">
+                            <span class="stat-label">평균 유사도 (Correlation)</span>
+                            <span class="stat-val" id="aiPatternCorr">--%</span>
+                        </div>
+                        <div class="ai-stat-card">
+                            <span class="stat-label">향후 5일 상승 확률</span>
+                            <span class="stat-val up" id="aiPatternUpProb">--%</span>
+                        </div>
+                        <div class="ai-stat-card">
+                            <span class="stat-label">패턴 매칭 종합 예측</span>
+                            <span class="stat-val" id="aiPatternSignal">분석 대기중</span>
+                        </div>
+                    </div>
+                    <div class="ai-pattern-list-section">
+                        <h5>과거 유사도 매칭 발생 구간 (상관계수 높은 순)</h5>
+                        <div class="ai-pattern-list" id="aiPatternList">
+                            <!-- Dynamically generated list items of matching history -->
+                        </div>
                     </div>
                 </div>
 

@@ -804,6 +804,14 @@
             }
         }
 
+        const aiPanel = document.getElementById('aiPatternPanel');
+        if (state.currentStrategy === 'kama4') {
+            if (aiPanel) aiPanel.classList.remove('hidden');
+            runAIPatternEngine();
+        } else {
+            if (aiPanel) aiPanel.classList.add('hidden');
+        }
+
         const rangeSlider = document.getElementById('signalScrubberRange');
         rangeSlider.max = Math.max(1, state.signals.length);
         state.pinnedIndex = state.signals.length - 1;
@@ -817,6 +825,178 @@
         } else {
             renderSubChartPage(state.flipPage);
         }
+    }
+
+    function runAIPatternEngine() {
+        if (state.candles.length < 30) return;
+        const closes = state.candles.map(c => c.close);
+        const dates = state.candles.map(c => c.date);
+        const N = closes.length;
+        const L = 10; // pattern window size
+        
+        const currentWindow = closes.slice(N - L);
+        const matches = [];
+
+        for (let i = 0; i <= N - L - 5; i++) {
+            const histWindow = closes.slice(i, i + L);
+            const corr = calculatePearson(currentWindow, histWindow);
+            if (corr >= 0.80) {
+                const anchorPrice = closes[i + L - 1];
+                const futurePrice = closes[i + L + 4];
+                const pctChange = ((futurePrice - anchorPrice) / anchorPrice) * 100;
+                matches.push({
+                    index: i + L - 1,
+                    startIndex: i,
+                    dateRange: `${dates[i].substring(5)} ~ ${dates[i + L - 1].substring(5)}`,
+                    corr,
+                    pctChange
+                });
+            }
+        }
+
+        // Sort by correlation descending
+        matches.sort((a, b) => b.corr - a.corr);
+        
+        // Take top 9 matches
+        const topMatches = matches.slice(0, 9);
+        
+        // Render UI
+        const countEl = document.getElementById('aiPatternCount');
+        const corrEl = document.getElementById('aiPatternCorr');
+        const upProbEl = document.getElementById('aiPatternUpProb');
+        const signalEl = document.getElementById('aiPatternSignal');
+        const accuracyEl = document.getElementById('aiPatternAccuracy');
+        const listEl = document.getElementById('aiPatternList');
+
+        if (topMatches.length === 0) {
+            if (countEl) countEl.textContent = '0 회';
+            if (corrEl) corrEl.textContent = '--%';
+            if (upProbEl) upProbEl.textContent = '--%';
+            if (signalEl) {
+                signalEl.textContent = '의견 없음';
+                signalEl.className = 'stat-val';
+            }
+            if (accuracyEl) accuracyEl.textContent = '매칭 신뢰도: 낮음';
+            if (listEl) listEl.innerHTML = '<div class="no-pattern-msg" style="grid-column: span 3; text-align: center; color: #64748b; font-size: 0.85rem; padding: 12px 0;">유사한 과거 주가 패턴을 찾지 못했습니다.</div>';
+            return;
+        }
+
+        const avgCorr = topMatches.reduce((sum, m) => sum + m.corr, 0) / topMatches.length;
+        const upMatches = topMatches.filter(m => m.pctChange > 0);
+        const upProbability = (upMatches.length / topMatches.length) * 100;
+
+        if (countEl) countEl.textContent = `${matches.length} 회`;
+        if (corrEl) corrEl.textContent = `${Math.round(avgCorr * 100)}%`;
+        if (upProbEl) {
+            upProbEl.textContent = `${Math.round(upProbability)}%`;
+            upProbEl.className = `stat-val ${upProbability >= 60 ? 'up' : upProbability <= 40 ? 'down' : ''}`;
+        }
+
+        let overallSignal = 'HOLD (중립)';
+        let signalClass = 'stat-val';
+        if (upProbability >= 65) {
+            overallSignal = '🤖 매수 추천';
+            signalClass = 'stat-val up';
+        } else if (upProbability <= 35) {
+            overallSignal = '🤖 매도 추천';
+            signalClass = 'stat-val down';
+        }
+        if (signalEl) {
+            signalEl.textContent = overallSignal;
+            signalEl.className = signalClass;
+        }
+
+        if (accuracyEl) {
+            const relText = avgCorr >= 0.90 ? '매우 높음' : avgCorr >= 0.85 ? '높음' : '보통';
+            accuracyEl.textContent = `매칭 신뢰도: ${relText} (${Math.round(avgCorr * 100)}%)`;
+        }
+
+        // Render matched list
+        if (listEl) {
+            listEl.innerHTML = topMatches.map(m => {
+                const isUp = m.pctChange > 0;
+                return `
+                    <div class="ai-match-card" data-index="${m.index}">
+                        <span class="ai-match-date"><i data-lucide="calendar" style="width:12px;height:12px;display:inline-block;vertical-align:middle;margin-right:4px;"></i>${m.dateRange}</span>
+                        <div class="ai-match-meta">
+                            <span class="ai-match-sim">${Math.round(m.corr * 100)}% 유사</span>
+                            <span class="ai-match-perf ${isUp ? 'up' : 'down'}">${isUp ? '📈 +' : '📉 '}${m.pctChange.toFixed(2)}%</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Bind click to match cards to focus chart on that date
+            listEl.querySelectorAll('.ai-match-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    const idx = parseInt(card.getAttribute('data-index'), 10);
+                    state.pinnedIndex = state.signals.findIndex(s => s.index === idx);
+                    if (state.pinnedIndex === -1) {
+                        state.signals.push({ index: idx, type: 'BUY', date: dates[idx], price: closes[idx], desc: '클릭 매칭 과거 유사 패턴 위치' });
+                        state.pinnedIndex = state.signals.length - 1;
+                    }
+                    const rangeSlider = document.getElementById('signalScrubberRange');
+                    if (rangeSlider) {
+                        rangeSlider.max = Math.max(1, state.signals.length);
+                        rangeSlider.value = state.pinnedIndex + 1;
+                    }
+                    updatePinnedSignalCard();
+                    renderMainChart();
+                });
+            });
+            
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+
+        // Add matches to state.signals so they are drawn on chart
+        topMatches.forEach(m => {
+            const isUp = m.pctChange > 0;
+            state.signals.push({
+                index: m.index,
+                type: isUp ? 'BUY' : 'SELL',
+                date: dates[m.index],
+                price: closes[m.index],
+                desc: `과거 유사 패턴 위치 (${Math.round(m.corr*100)}% 일치, 5일후 ${isUp ? '+' : ''}${m.pctChange.toFixed(2)}%)`
+            });
+        });
+
+        // Add overall prediction signal at the last candle
+        if (upProbability >= 65) {
+            state.signals.push({
+                index: N - 1,
+                type: 'BUY',
+                date: dates[N - 1],
+                price: closes[N - 1],
+                desc: `🤖 AI 매수 예측: 과거 ${matches.length}회 반복 패턴 기반 상승 확률 ${Math.round(upProbability)}%`
+            });
+        } else if (upProbability <= 35) {
+            state.signals.push({
+                index: N - 1,
+                type: 'SELL',
+                date: dates[N - 1],
+                price: closes[N - 1],
+                desc: `🤖 AI 매도 예측: 과거 ${matches.length}회 반복 패턴 기반 하락 확률 ${Math.round(100 - upProbability)}%`
+            });
+        }
+    }
+
+    function calculatePearson(x, y) {
+        const n = x.length;
+        let sumX = 0, sumY = 0, sumXY = 0;
+        let sumX2 = 0, sumY2 = 0;
+        for (let i = 0; i < n; i++) {
+            sumX += x[i];
+            sumY += y[i];
+            sumXY += x[i] * y[i];
+            sumX2 += x[i] * x[i];
+            sumY2 += y[i] * y[i];
+        }
+        const num = n * sumXY - sumX * sumY;
+        const den = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+        if (den === 0) return 0;
+        return num / den;
     }
 
     // Indicator Calculators
@@ -965,6 +1145,37 @@
             datasets.push({ label: '일일평균가', data: dailyAvg, borderColor: '#10b981', borderWidth: 1.5, pointRadius: 0 });
             datasets.push({ label: '14일 최고가 연장선', data: high14, borderColor: '#ff3b69', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0 });
         }
+
+        // Plot buy/sell signals on chart
+        const signalBuyData = new Array(state.candles.length).fill(null);
+        const signalSellData = new Array(state.candles.length).fill(null);
+        state.signals.forEach(s => {
+            if (s.index >= 0 && s.index < state.candles.length) {
+                if (s.type === 'BUY') {
+                    signalBuyData[s.index] = closes[s.index];
+                } else if (s.type === 'SELL') {
+                    signalSellData[s.index] = closes[s.index];
+                }
+            }
+        });
+        datasets.push({
+            label: '매수 추천',
+            data: signalBuyData,
+            borderColor: 'transparent',
+            backgroundColor: '#ff3b69',
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            showLine: false
+        });
+        datasets.push({
+            label: '매도 추천',
+            data: signalSellData,
+            borderColor: 'transparent',
+            backgroundColor: '#38bdf8',
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            showLine: false
+        });
 
         state.charts.main = new Chart(ctx, {
             type: 'line',
