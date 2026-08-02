@@ -1475,11 +1475,12 @@
                 }
             });
 
-            const startIdx = state.candles.length - visibleCandles.length;
-            const slicedDailyAvg = fullDailyAvg.slice(startIdx);
-            const slicedHigh14 = fullHigh14.slice(startIdx);
-            const slicedLow14 = fullLow14.slice(startIdx);
-            const slicedAvg14 = fullAvg14.slice(startIdx);
+            const startIdx = state.candles.indexOf(visibleCandles[0]);
+            const endIdx = startIdx + visibleCandles.length;
+            const slicedDailyAvg = fullDailyAvg.slice(startIdx, endIdx);
+            const slicedHigh14 = fullHigh14.slice(startIdx, endIdx);
+            const slicedLow14 = fullLow14.slice(startIdx, endIdx);
+            const slicedAvg14 = fullAvg14.slice(startIdx, endIdx);
 
             datasets.push({ label: '일일평균가', data: slicedDailyAvg, borderColor: '#10b981', borderWidth: 1.5, pointRadius: 0, type: 'line' });
             datasets.push({ label: '14일 최고가 연장선', data: slicedHigh14, borderColor: '#ff3b69', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, type: 'line' });
@@ -1603,18 +1604,29 @@
 
     function buildSubChartDataset(page) {
         const visibleCandles = getFilteredCandles();
-        const startIdx = state.candles.length - visibleCandles.length;
+        if (visibleCandles.length === 0) return { labels: [], datasets: [] };
+        
+        const startIdx = state.candles.indexOf(visibleCandles[0]);
+        const endIdx = startIdx + visibleCandles.length;
         
         const labels = visibleCandles.map(c => c.date);
         const closes = state.candles.map(c => c.close);
         const visibleVolumes = visibleCandles.map(c => c.volume);
 
         if (page === 1) {
-            const rsi = calculateRSI(closes, 14).slice(startIdx);
-            return { labels, datasets: [{ label: 'RSI (14)', data: rsi, borderColor: '#ff3b69', borderWidth: 1.5, pointRadius: 0 }] };
+            const rsi = calculateRSI(closes, 14).slice(startIdx, endIdx);
+            const stoch = calculateStochastic(state.candles, 14, 3, 3);
+            return {
+                labels,
+                datasets: [
+                    { label: 'RSI (14)', data: rsi, borderColor: '#ff3b69', borderWidth: 1.5, pointRadius: 0, fill: false },
+                    { label: 'Stoch %K', data: stoch.k.slice(startIdx, endIdx), borderColor: '#fbbf24', borderWidth: 1, pointRadius: 0, fill: false },
+                    { label: 'Stoch %D', data: stoch.d.slice(startIdx, endIdx), borderColor: '#10b981', borderWidth: 1.5, pointRadius: 0, fill: false }
+                ]
+            };
         } else if (page === 2) {
             const { macd, signal, hist } = calculateMACD(closes);
-            const histSliced = hist.slice(startIdx);
+            const histSliced = hist.slice(startIdx, endIdx);
             return {
                 labels,
                 datasets: [
@@ -1628,7 +1640,7 @@
                     },
                     {
                         label: 'MACD Line',
-                        data: macd.slice(startIdx),
+                        data: macd.slice(startIdx, endIdx),
                         borderColor: '#00f2fe',
                         borderWidth: 1.5,
                         pointRadius: 0,
@@ -1636,7 +1648,7 @@
                     },
                     {
                         label: 'Signal Line',
-                        data: signal.slice(startIdx),
+                        data: signal.slice(startIdx, endIdx),
                         borderColor: '#a78bfa',
                         borderWidth: 1.5,
                         pointRadius: 0,
@@ -1645,8 +1657,8 @@
                 ]
             };
         } else if (page === 3) {
-            const disp5 = calculateDisparity(closes, 5).slice(startIdx);
-            const disp20 = calculateDisparity(closes, 20).slice(startIdx);
+            const disp5 = calculateDisparity(closes, 5).slice(startIdx, endIdx);
+            const disp20 = calculateDisparity(closes, 20).slice(startIdx, endIdx);
             return {
                 labels, datasets: [
                     { label: '이격도 5일', data: disp5, borderColor: '#00f2fe', borderWidth: 1, pointRadius: 0 },
@@ -1656,29 +1668,50 @@
         } else if (page === 4) {
             return { labels, datasets: [{ label: '거래량', data: visibleVolumes, type: 'bar', backgroundColor: 'rgba(0, 242, 254, 0.4)' }] };
         } else if (page === 5) {
-            const ma20 = calculateMA(closes, 20);
-            const pctB = closes.map((v, i) => i < 20 ? 0.5 : (v - ma20[i] * 0.95) / (ma20[i] * 0.1)).slice(startIdx);
-            return { labels, datasets: [{ label: '볼린저 %B', data: pctB, borderColor: '#fbbf24', borderWidth: 1.5, pointRadius: 0 }] };
+            const bb = calculateBollinger(closes, 20, 2);
+            return {
+                labels,
+                datasets: [
+                    { label: '볼린저 %B', data: bb.pctB.slice(startIdx, endIdx), borderColor: '#fbbf24', borderWidth: 1.5, pointRadius: 0, fill: false },
+                    { label: '볼린저 대역폭', data: bb.bandwidth.slice(startIdx, endIdx), borderColor: '#8b5cf6', borderWidth: 1, pointRadius: 0, fill: false }
+                ]
+            };
         } else if (page === 6) {
-            const cci = calculateCCI(state.candles, 14).slice(startIdx);
-            return { labels, datasets: [{ label: 'CCI (14)', data: cci, borderColor: '#ec4899', borderWidth: 1.5, pointRadius: 0 }] };
+            const cci = calculateCCI(state.candles, 14).slice(startIdx, endIdx);
+            const wr = calculateWilliamsR(state.candles, 14).slice(startIdx, endIdx);
+            return {
+                labels,
+                datasets: [
+                    { label: 'CCI (14)', data: cci, borderColor: '#ec4899', borderWidth: 1.5, pointRadius: 0, fill: false },
+                    { label: 'Williams %R', data: wr, borderColor: '#10b981', borderWidth: 1, pointRadius: 0, fill: false }
+                ]
+            };
         } else if (page === 7) {
             const ichi = calculateIchimoku(state.candles);
             return {
                 labels, datasets: [
-                    { label: '전환선(9)', data: ichi.tenkan.slice(startIdx), borderColor: '#00f2fe', borderWidth: 1.5, pointRadius: 0 },
-                    { label: '기준선(26)', data: ichi.kijun.slice(startIdx), borderColor: '#a855f7', borderWidth: 1.5, pointRadius: 0 }
+                    { label: '전환선(9)', data: ichi.tenkan.slice(startIdx, endIdx), borderColor: '#00f2fe', borderWidth: 1.5, pointRadius: 0, fill: false },
+                    { label: '기준선(26)', data: ichi.kijun.slice(startIdx, endIdx), borderColor: '#a855f7', borderWidth: 1.5, pointRadius: 0, fill: false },
+                    { label: '선행스팬A(26)', data: ichi.spanA.slice(startIdx, endIdx), borderColor: 'rgba(16, 185, 129, 0.4)', borderWidth: 1, borderDash: [2, 2], pointRadius: 0, fill: false },
+                    { label: '선행스팬B(52)', data: ichi.spanB.slice(startIdx, endIdx), borderColor: 'rgba(239, 68, 68, 0.4)', borderWidth: 1, borderDash: [2, 2], pointRadius: 0, fill: false }
                 ]
             };
         } else if (page === 8) {
-            const adx = calculateRSI(closes, 14).map(v => Math.abs(v - 50) * 1.8).slice(startIdx);
-            return { labels, datasets: [{ label: 'ADX 추세강도', data: adx, borderColor: '#10b981', borderWidth: 1.5, pointRadius: 0 }] };
+            const dmi = calculateDMI(state.candles, 14);
+            return {
+                labels,
+                datasets: [
+                    { label: 'ADX', data: dmi.adx.slice(startIdx, endIdx), borderColor: '#10b981', borderWidth: 2, pointRadius: 0, fill: false },
+                    { label: '+DI', data: dmi.plusDI.slice(startIdx, endIdx), borderColor: '#ff3b69', borderWidth: 1, pointRadius: 0, fill: false },
+                    { label: '-DI', data: dmi.minusDI.slice(startIdx, endIdx), borderColor: '#38bdf8', borderWidth: 1, pointRadius: 0, fill: false }
+                ]
+            };
         } else if (page === 9) {
-            const mfi = calculateRSI(closes, 14).slice(startIdx);
-            return { labels, datasets: [{ label: 'MFI (14)', data: mfi, borderColor: '#38bdf8', borderWidth: 1.5, pointRadius: 0 }] };
+            const mfi = calculateMFI(state.candles, 14).slice(startIdx, endIdx);
+            return { labels, datasets: [{ label: 'MFI (14)', data: mfi, borderColor: '#38bdf8', borderWidth: 1.5, pointRadius: 0, fill: false }] };
         } else {
-            const atr = calculateATR(state.candles, 14).slice(startIdx);
-            return { labels, datasets: [{ label: 'ATR (14)', data: atr, borderColor: '#fb923c', borderWidth: 1.5, pointRadius: 0 }] };
+            const atr = calculateATR(state.candles, 14).slice(startIdx, endIdx);
+            return { labels, datasets: [{ label: 'ATR (14)', data: atr, borderColor: '#fb923c', borderWidth: 1.5, pointRadius: 0, fill: false }] };
         }
     }
 
