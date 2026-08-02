@@ -1102,15 +1102,31 @@
     function calculateIchimoku(candles) {
         const tenkan = new Array(candles.length).fill(candles[0].close);
         const kijun = new Array(candles.length).fill(candles[0].close);
-        for (let i = 9; i < candles.length; i++) {
-            const slice9 = candles.slice(i - 9, i);
+        const spanA = new Array(candles.length).fill(candles[0].close);
+        const spanB = new Array(candles.length).fill(candles[0].close);
+        
+        for (let i = 8; i < candles.length; i++) {
+            const slice9 = candles.slice(i - 8, i + 1);
             tenkan[i] = (Math.max(...slice9.map(c => c.high)) + Math.min(...slice9.map(c => c.low))) / 2;
         }
-        for (let i = 26; i < candles.length; i++) {
-            const slice26 = candles.slice(i - 26, i);
+        for (let i = 25; i < candles.length; i++) {
+            const slice26 = candles.slice(i - 25, i + 1);
             kijun[i] = (Math.max(...slice26.map(c => c.high)) + Math.min(...slice26.map(c => c.low))) / 2;
         }
-        return { tenkan, kijun };
+        for (let i = 0; i < candles.length; i++) {
+            const baseVal = (tenkan[i] + kijun[i]) / 2;
+            if (i + 26 < candles.length) {
+                spanA[i + 26] = baseVal;
+            }
+        }
+        for (let i = 51; i < candles.length; i++) {
+            const slice52 = candles.slice(i - 51, i + 1);
+            const val52 = (Math.max(...slice52.map(c => c.high)) + Math.min(...slice52.map(c => c.low))) / 2;
+            if (i + 26 < candles.length) {
+                spanB[i + 26] = val52;
+            }
+        }
+        return { tenkan, kijun, spanA, spanB };
     }
 
     function calculateATR(candles, period = 14) {
@@ -1125,6 +1141,155 @@
         }
         return atr;
     }
+
+    function calculateStochastic(candles, period = 14, kPeriod = 3, dPeriod = 3) {
+        const k = new Array(candles.length).fill(50);
+        const d = new Array(candles.length).fill(50);
+        const fastK = new Array(candles.length).fill(50);
+
+        for (let i = period - 1; i < candles.length; i++) {
+            const sub = candles.slice(i - period + 1, i + 1);
+            const highs = sub.map(c => c.high);
+            const lows = sub.map(c => c.low);
+            const highest = Math.max(...highs);
+            const lowest = Math.min(...lows);
+            const diff = highest - lowest;
+            fastK[i] = diff === 0 ? 50 : ((candles[i].close - lowest) / diff) * 100;
+        }
+
+        for (let i = period + kPeriod - 2; i < candles.length; i++) {
+            const sum = fastK.slice(i - kPeriod + 1, i + 1).reduce((a, b) => a + b, 0);
+            k[i] = sum / kPeriod;
+        }
+
+        for (let i = period + kPeriod + dPeriod - 3; i < candles.length; i++) {
+            const sum = k.slice(i - dPeriod + 1, i + 1).reduce((a, b) => a + b, 0);
+            d[i] = sum / dPeriod;
+        }
+
+        return { k, d };
+     }
+
+     function calculateBollinger(closes, period = 20, multiplier = 2) {
+         const mid = new Array(closes.length).fill(closes[0]);
+         const pctB = new Array(closes.length).fill(50);
+         const bandwidth = new Array(closes.length).fill(0);
+
+         for (let i = period - 1; i < closes.length; i++) {
+             const sub = closes.slice(i - period + 1, i + 1);
+             const average = sub.reduce((a, b) => a + b, 0) / period;
+             mid[i] = average;
+
+             const variance = sub.reduce((a, b) => a + Math.pow(b - average, 2), 0) / period;
+             const stddev = Math.sqrt(variance);
+             
+             const upper = average + multiplier * stddev;
+             const lower = average - multiplier * stddev;
+             const diff = upper - lower;
+
+             pctB[i] = diff === 0 ? 50 : ((closes[i] - lower) / diff) * 100;
+             bandwidth[i] = average === 0 ? 0 : (diff / average) * 100;
+         }
+
+         return { pctB, bandwidth };
+     }
+
+     function calculateWilliamsR(candles, period = 14) {
+         const r = new Array(candles.length).fill(-50);
+         for (let i = period - 1; i < candles.length; i++) {
+             const sub = candles.slice(i - period + 1, i + 1);
+             const highest = Math.max(...sub.map(c => c.high));
+             const lowest = Math.min(...sub.map(c => c.low));
+             const diff = highest - lowest;
+             r[i] = diff === 0 ? -50 : -100 * (highest - candles[i].close) / diff;
+         }
+         return r;
+     }
+
+     function calculateDMI(candles, period = 14) {
+         const tr = new Array(candles.length).fill(0);
+         const plusDM = new Array(candles.length).fill(0);
+         const minusDM = new Array(candles.length).fill(0);
+
+         for (let i = 1; i < candles.length; i++) {
+             const c = candles[i];
+             const prev = candles[i - 1];
+             tr[i] = Math.max(c.high - c.low, Math.abs(c.high - prev.close), Math.abs(c.low - prev.close));
+             const diffHigh = c.high - prev.high;
+             const diffLow = prev.low - c.low;
+             plusDM[i] = (diffHigh > diffLow && diffHigh > 0) ? diffHigh : 0;
+             minusDM[i] = (diffLow > diffHigh && diffLow > 0) ? diffLow : 0;
+         }
+
+         const smoothTR = new Array(candles.length).fill(0);
+         const smoothPlusDM = new Array(candles.length).fill(0);
+         const smoothMinusDM = new Array(candles.length).fill(0);
+
+         let sumTR = 0, sumPlus = 0, sumMinus = 0;
+         for (let i = 1; i <= period; i++) {
+             sumTR += tr[i];
+             sumPlus += plusDM[i];
+             sumMinus += minusDM[i];
+         }
+         smoothTR[period] = sumTR;
+         smoothPlusDM[period] = sumPlus;
+         smoothMinusDM[period] = sumMinus;
+
+         for (let i = period + 1; i < candles.length; i++) {
+             smoothTR[i] = smoothTR[i - 1] - (smoothTR[i - 1] / period) + tr[i];
+             smoothPlusDM[i] = smoothPlusDM[i - 1] - (smoothPlusDM[i - 1] / period) + plusDM[i];
+             smoothMinusDM[i] = smoothMinusDM[i - 1] - (smoothMinusDM[i - 1] / period) + minusDM[i];
+         }
+
+         const plusDI = new Array(candles.length).fill(0);
+         const minusDI = new Array(candles.length).fill(0);
+         const dx = new Array(candles.length).fill(0);
+
+         for (let i = period; i < candles.length; i++) {
+             plusDI[i] = smoothTR[i] === 0 ? 0 : (smoothPlusDM[i] / smoothTR[i]) * 100;
+             minusDI[i] = smoothTR[i] === 0 ? 0 : (smoothMinusDM[i] / smoothTR[i]) * 100;
+             const diff = Math.abs(plusDI[i] - minusDI[i]);
+             const sum = plusDI[i] + minusDI[i];
+             dx[i] = sum === 0 ? 0 : (diff / sum) * 100;
+         }
+
+         const adx = calculateEMA(dx.slice(period), period);
+         const adxFull = new Array(candles.length).fill(0);
+         for (let i = period; i < candles.length; i++) {
+             adxFull[i] = adx[i - period] || 0;
+         }
+
+         return { plusDI, minusDI, adx: adxFull };
+     }
+
+     function calculateMFI(candles, period = 14) {
+         const mfi = new Array(candles.length).fill(50);
+         const tp = candles.map(c => (c.high + c.low + c.close) / 3);
+         const rmf = candles.map((c, i) => tp[i] * c.volume);
+         
+         const pmf = new Array(candles.length).fill(0);
+         const nmf = new Array(candles.length).fill(0);
+         
+         for (let i = 1; i < candles.length; i++) {
+             if (tp[i] > tp[i - 1]) {
+                 pmf[i] = rmf[i];
+             } else if (tp[i] < tp[i - 1]) {
+                 nmf[i] = rmf[i];
+             }
+         }
+
+         for (let i = period; i < candles.length; i++) {
+             const sumPMF = pmf.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
+             const sumNMF = nmf.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
+             if (sumNMF === 0) {
+                 mfi[i] = 100;
+             } else {
+                 const mr = sumPMF / sumNMF;
+                 mfi[i] = 100 - (100 / (1 + mr));
+             }
+         }
+         return mfi;
+     }
 
     function updatePinnedSignalCard() {
         const badge = document.getElementById('pinnedSignalBadge');
